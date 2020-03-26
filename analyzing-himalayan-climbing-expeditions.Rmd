@@ -1,0 +1,73 @@
+---
+title: Analyzing Himalayan climbing expeditions
+author: Alex Cookson
+date: '2020-03-22'
+slug: analyzing-himalayan-climbing-expeditions
+categories: []
+tags: []
+description: ''
+topics: []
+---  
+\  
+
+Introduction
+
+
+## Setup
+
+First, we'll load the `tidyverse` and import our data.
+
+```{r, warning = FALSE, message = FALSE}
+library(tidyverse)
+
+theme_set(theme_light())
+
+peaks <- readr::read_csv("https://raw.githubusercontent.com/tacookson/data/master/himalayan-expeditions/peaks.csv")
+expeditions <- readr::read_csv("https://raw.githubusercontent.com/tacookson/data/master/himalayan-expeditions/expeditions.csv")
+members <- readr::read_csv("https://raw.githubusercontent.com/tacookson/data/master/himalayan-expeditions/members.csv")
+```  
+\  
+
+
+## Data inspection
+
+Let's take a look.
+
+```{r}
+peaks %>%
+  ggplot(aes(height_metres)) +
+  geom_histogram(binwidth = 100)
+```
+
+
+## Appendix
+
+### Preliminary Questions
+
+Peaks:
+
+- How tall are Himalayan peaks?
+- When were they first climbed?
+- What countries were involved in first ascents?
+
+
+Expeditions:
+
+- What peaks were the most popular to climb?
+- How big are expeditions?
+- How many people are typically hired?
+- What are the success rates of expeditions?
+- Why do expeditions fail?
+- What is the threat rate for injuries and deaths?
+- Are there any particularly dangerous peaks?
+- What proportion of expeditions use oxygen?
+
+
+Members:
+
+- What's the typical composition of expedition members? Age, sex, citizenship?
+- Are any particular mountains more popular with certain countries?
+- Are there any particularly dangerous expedition roles
+- What types of injuries and causes of death are there?
+- Are there any particularly dangerous elevations?
+- Are younger climbers more likely to attempt solo climbs or not use oxygen?
