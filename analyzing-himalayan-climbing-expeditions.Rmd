@@ -19,6 +19,9 @@ First, we'll load the `tidyverse` and import our data.
 
 ```{r, warning = FALSE, message = FALSE}
 library(tidyverse)
+library(fishualize) # Cool colour palettes
+library(glue)
+library(scales)
 
 theme_set(theme_light())
 
@@ -31,13 +34,80 @@ members <- readr::read_csv("https://raw.githubusercontent.com/tacookson/data/mas
 
 ## Data inspection
 
-Let's take a look.
+How high are these peaks?
 
 ```{r}
 peaks %>%
   ggplot(aes(height_metres)) +
   geom_histogram(binwidth = 100)
 ```
+
+How many are climbed vs. not?
+
+```{r}
+peaks %>%
+  count(climbing_status)
+```
+
+What is different from the climbed and unclimbed peaks? Are unclimbed peaks higher?
+
+Showcase the `varwdith` argument of geom_boxplot and how to get the N in the axis label
+
+```{r}
+climbed_labels <- glue("{levels(as.factor(peaks$climbing_status))}\nN = {table(peaks$climbing_status)}")
+
+peaks %>%
+  ggplot(aes(climbing_status, height_metres, fill = climbing_status)) +
+  geom_boxplot(alpha = 0.5,
+               varwidth = TRUE) +
+  scale_fill_fish(option = "Pseudocheilinus_tetrataenia",
+                  discrete = TRUE) +
+  scale_x_discrete(labels = climbed_labels) +
+  scale_y_continuous(labels = comma_format()) +
+  labs(title = "Height and Climbing status of Himalayan Peaks",
+       x = "",
+       y = "Peak height (metres)",
+       fill = "") +
+  theme(legend.position = "none")
+```
+
+Fix first ascent year for Sharpu II (code SPH2)
+
+```{r}
+peaks_fixed <- peaks %>%
+  mutate(first_ascent_year = ifelse(peak_id == "SPH2", 2018, first_ascent_year))
+```
+
+Visualize distribution of first ascent years
+
+```{r}
+peaks_fixed %>%
+  ggplot(aes(first_ascent_year)) +
+  geom_histogram(binwidth = 5)
+```
+
+Count countries associated with first ascents
+
+```{r}
+peaks_fixed %>%
+  separate_rows(first_ascent_country, sep = ",") %>%
+  mutate(first_ascent_country = str_squish(first_ascent_country)) %>%
+  count(first_ascent_country, name = "first_ascents", sort = TRUE) %>%
+  filter(!is.na(first_ascent_country)) %>%
+  mutate(first_ascent_country = fct_reorder(first_ascent_country, first_ascents)) %>%
+  top_n(20, wt = first_ascents) %>%
+  ggplot(aes(first_ascents, first_ascent_country, fill = first_ascent_country)) +
+  geom_col() +
+  scale_fill_fish(option = "Pseudocheilinus_tetrataenia",
+                  discrete = TRUE) +
+  labs(title = "Countries with the most first ascents of Himalayan peaks",
+       x = "Number of first ascents",
+       y = "") +
+  theme(legend.position = "none")
+```
+
+
+
 
 
 ## Appendix
