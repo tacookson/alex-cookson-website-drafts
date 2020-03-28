@@ -1,0 +1,254 @@
+---
+title: Analyzing Broadway weekly grosses
+author: Alex Cookson
+date: '2020-03-22'
+slug: analyzing-broadway-weekly-grosses
+categories: []
+tags: []
+description: ''
+topics: []
+---  
+\  
+
+Load packages and import data
+
+```{r}
+library(tidyverse)
+library(lubridate)
+library(scales)
+library(extrafont)
+
+theme_set(theme_light())
+
+grosses_raw <- readr::read_csv("https://raw.githubusercontent.com/tacookson/data/master/broadway-grosses/grosses.csv",
+                            guess_max = 10000)
+plots <- readr::read_csv("https://raw.githubusercontent.com/tacookson/data/master/broadway-grosses/synopses.csv")
+
+## Data source needs to be updated
+## cpi_raw <- readr::read_csv("https://raw.githubusercontent.com/tacookson/broadway/master/data/raw/CUSR0000SA0L1E.csv")
+```
+
+Cleaning grosses data
+
+```{r}
+grosses_clean <- grosses_raw %>%
+  mutate(no_shows = performances + previews == 0) %>% # Find weeks where shows weren't performing
+  mutate_at(vars(weekly_gross:pct_capacity), ~ ifelse(no_shows | . == 0, NA, .)) %>% # Turn metrics into missing values if there were no shows OR if certain metrics show 0 (this is likely due to incomplete or missing data from the source)
+  arrange(theatre, week_ending) %>%
+  fill(seats_in_theatre, .direction = "down") %>% # Fill seats_in_theatre based on last known value
+  arrange(week_ending, show) %>% # Get back into chronological order
+  select(-no_shows) # Get rid of no_shows helper variable
+```
+
+Creating week of show variable
+
+```{r}
+calculate_run_week <- function(x) {
+  as.integer(pmax(1, difftime("1985-06-09", x, units = "weeks")))
+}
+
+grosses_processed <- grosses_clean %>%
+  # Set week of run for shows at the beginning of dataset
+  mutate(week_of_run = case_when(week_ending != "1985-06-09" ~ NA_integer_,
+                                 show == "42nd Street" ~ calculate_run_week("1980-08-18"),
+                                 show == "A Chorus Line" ~ calculate_run_week("1975-07-25"),
+                                 show == "Aren't We All?" ~ calculate_run_week("1985-04-29"),
+                                 show == "Arms and the Man" ~ calculate_run_week("1985-05-30"),
+                                 show == "As Is" ~ calculate_run_week("1985-05-01"),
+                                 show == "Big River" ~ calculate_run_week("1985-04-25"),
+                                 show == "Biloxi Blues" ~ calculate_run_week("1985-03-28"),
+                                 show == "Brighton Beach Memoirs" ~ calculate_run_week("1983-03-27"),
+                                 show == "Cats" ~ calculate_run_week("1982-10-07"),
+                                 show == "Doubles" ~ calculate_run_week("1985-05-08"),
+                                 show == "Grind" ~ calculate_run_week("1985-04-16"),
+                                 show == "La Cage aux Folles" ~ calculate_run_week("1983-08-09"),
+                                 show == "Leader of the Pack" ~ calculate_run_week("1985-02-21"),
+                                 show == "Oh! Calcutta!" ~ calculate_run_week("1976-09-24"),
+                                 show == "Singin' in the Rain" ~ calculate_run_week("1985-06-13"),
+                                 show == "Sunday in the Park with George" ~ calculate_run_week("1984-04-02"),
+                                 show == "The King and I" ~ calculate_run_week("1984-12-26"),
+                                 show == "The Odd Couple" ~ calculate_run_week("1985-06-04"),
+                                 show == "The Tap Dance Kid" ~ calculate_run_week("1983-11-16"),
+                                 TRUE ~ NA_integer_)) %>%
+  group_by(show) %>%
+  arrange(week_ending) %>%
+  mutate(# Find the first week of a run (either the earliest week ending or a week ending more than 3 months after the previous one)
+         first_week = row_number() == 1 | week_ending - lag(week_ending) > 90,
+         # Increment each week by one (but take original shows into account)
+         week_of_run = cumsum(ifelse(is.na(week_of_run), as.integer(week_ending - lag(week_ending) <= 90), week_of_run)),
+         # Convert anything beyond 1st run to NA
+         # Needed so that first-week shows that have multiple runs don't have a counter that keeps going
+         week_of_run = ifelse(cumsum(first_week) > 1, NA_integer_, week_of_run)) %>%
+  # Group by the starting week of each run and calculate week of run
+  group_by(show, run_number = cumsum(first_week)) %>%
+  mutate(week_of_run = ifelse(is.na(week_of_run), row_number(), week_of_run)) %>%
+  ungroup() %>%
+  select(-first_week)
+```
+
+Visualize show runs
+
+```{r}
+runs_timeline <- grosses_processed %>%
+  group_by(show) %>%
+  mutate(max_run_number = max(run_number),
+         total_weeks = n()) %>%
+  ungroup() %>%
+  group_by(show, run_number, max_run_number, total_weeks) %>%
+  summarise(start = min(week_ending),
+            end = max(week_ending)) %>%
+  ungroup() %>%
+  filter(dense_rank(desc(total_weeks)) <= 20) %>%
+  mutate(show = fct_reorder(show, total_weeks, max)) %>%
+  pivot_longer(start:end, names_to = "marker", values_to = "date") %>%
+  mutate(still_playing = date == max(date))
+
+runs_labels <- runs_timeline %>%
+  group_by(show, run_number) %>%
+  summarise(label_date = min(date)) %>%
+  ungroup()
+
+runs_timeline %>%
+  ggplot(aes(date, show)) +
+  geom_line(aes(group = interaction(show, run_number)),
+            size = 1,
+            col = "#225ea8") +
+  geom_point(size = 3,
+             col = "#225ea8") +
+  geom_point(data = runs_timeline %>% filter(still_playing),
+             size = 2,
+             col = "white") +
+  geom_text(data = runs_labels,
+            aes(x = label_date, y = show, label = run_number),
+            nudge_x = -200,
+            col = "grey40",
+            family = "Bahnschrift",
+            size = 8) +
+  scale_x_date(date_breaks = "1 years", date_labels = paste0("\'", "%y"), sec.axis = dup_axis()) +
+  scale_y_discrete() +
+  labs(title = "The Phaaaaaaantom of the Op-e-ra is here...to stay",
+       subtitle = "1985-Present | Hollow points are shows still in production",
+       caption = "Source: Playbill",
+       x = "",
+       y = "") +
+  theme(text = element_text(family = "Bahnschrift"),
+        plot.title = element_text(size = 40),
+        plot.subtitle = element_text(size = 20),
+        plot.caption = element_text(size = 20),
+        axis.text.x = element_text(size = 18),
+        axis.text.y = element_text(size = 24),
+        panel.grid = element_line(colour = "gray90"),
+        panel.grid.minor = element_blank())
+```
+
+Cleaning CPI inflation data
+
+```{r}
+cpi <- cpi_raw %>%
+  transmute(cpi_period = make_date(Year, parse_number(Period), 1),
+            cpi_index = Value,
+            jan_2020_dollars = cpi_index[cpi_period == "2020-01-01"] / cpi_index)
+```
+Adjusting dollar amounts to be in Jan 2020 dollars
+
+```{r}
+real_grosses <- grosses_processed %>%
+  mutate(cpi_period = floor_date(week_ending, unit = "month")) %>%
+  left_join(cpi, by = "cpi_period") %>%
+  mutate_at(vars(weekly_gross_overall, weekly_gross, potential_gross, avg_ticket_price, top_ticket_price), ~ . * jan_2020_dollars) %>%
+  select(-cpi_period:-jan_2020_dollars)
+```
+
+
+Missing data
+
+```{r}
+grosses_raw %>%
+  summarise_all(~ mean(is.na(.))) %>%
+  gather("variable", "pct_missing") %>%
+  arrange(-pct_missing)
+```
+
+
+Visualize progression of average top ticket prices
+
+```{r}
+top_tickets <- grosses_processed %>%
+  mutate(year = year(week_ending)) %>%
+  filter(year >= 1996,
+         !is.na(top_ticket_price)) %>%
+  group_by(year, show) %>%
+  summarise(avg_ticket_price = mean(avg_ticket_price, na.rm = TRUE),
+            avg_top_ticket_price = mean(top_ticket_price, na.rm = TRUE)) %>%
+  mutate(annotated = (show == "The Producers" & between(year, 2002, 2003)) | show == "Manilow on Broadway") %>%
+  ungroup() %>%
+  mutate(is_hamilton = show == "Hamilton")
+
+avg_top_tickets_by_year <- top_tickets %>%
+  group_by(year) %>%
+  summarise(avg_top_ticket_price = mean(avg_top_ticket_price))
+  
+top_tickets %>%
+  ggplot(aes(year, avg_top_ticket_price)) +
+  geom_jitter(data = top_tickets %>% filter(!annotated, !is_hamilton),
+              position = position_jitter(width = 0.2),
+              shape = 19,
+              size = 2,
+              col = "grey80",
+              alpha = 0.5) +
+  geom_point(data = top_tickets %>% filter(annotated),
+             size = 2,
+             col = "black") +
+  geom_point(data = top_tickets %>% filter(is_hamilton),
+             col = "#fc9d26",
+             size = 4) +
+  geom_line(data = avg_top_tickets_by_year,
+            size = 1,
+            col = "darkblue") +
+  scale_x_continuous(breaks = seq(1996, 2020, 2)) +
+  scale_y_continuous(breaks = seq(0, 1000, 100),
+                     labels = dollar_format()) +
+  annotate("text", x = 2018.5, y = 880, label = "Hamilton", col = "#fc9d26") +
+  annotate("curve", x = 2011, y = 660, xend = 2012.95, yend = 695, curvature = 0.3, arrow = arrow(length = unit(2, "mm"))) +
+  annotate("text", x = 2010.9, y = 665, label = "Manilow on Broadway", hjust = "right") +
+  annotate("curve", x = 2003.5, y = 540, xend = 2002.05, yend = 485, curvature = 0.3, arrow = arrow(length = unit(2, "mm"))) +
+  annotate("curve", x = 2003.5, y = 540, xend = 2003, yend = 485, curvature = 0.3, arrow = arrow(length = unit(2, "mm"))) +
+  annotate("text", x = 2003.5, y = 540, label = "The Producers", hjust = "left") +
+  labs(title = "A premium Broadway experience has become much pricier",
+       subtitle = "(Especially if you're seeing Hamilton) Points show the average top ticket price for each show, by year",
+       x = "",
+       y = "") +
+  theme(panel.grid.minor = element_blank())
+```
+
+
+Visualize progression of average average ticket prices
+
+```{r}
+avg_tickets <- grosses_processed %>%
+  mutate(year = year(week_ending)) %>%
+  filter(!is.na(avg_ticket_price)) %>%
+  group_by(year, show) %>%
+  summarise(avg_ticket_price = mean(avg_ticket_price, na.rm = TRUE)) %>%
+  ungroup()
+
+avg_tickets_by_year <- avg_tickets %>%
+  group_by(year) %>%
+  summarise(avg_ticket_price = mean(avg_ticket_price))
+  
+avg_tickets %>%
+  ggplot(aes(year, avg_ticket_price)) +
+  geom_jitter(position = position_jitter(width = 0.2),
+              shape = 19,
+              size = 2,
+              col = "grey80",
+              alpha = 0.5) +
+  geom_line(data = avg_tickets_by_year,
+            size = 1,
+            col = "darkblue") +
+  scale_y_continuous(labels = dollar_format()) +
+  labs(title = "",
+       x = "",
+       y = "") +
+  theme(panel.grid.minor = element_blank())
+```
