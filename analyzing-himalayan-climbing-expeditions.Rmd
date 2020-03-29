@@ -86,14 +86,32 @@ peaks_fixed %>%
   geom_histogram(binwidth = 5)
 ```
 
-Count countries associated with first ascents
+What peaks were first summited before 1950
 
 ```{r}
 peaks_fixed %>%
-  separate_rows(first_ascent_country, sep = ",") %>%
-  mutate(first_ascent_country = str_squish(first_ascent_country)) %>%
-  count(first_ascent_country, name = "first_ascents", sort = TRUE) %>%
+  filter(first_ascent_year < 1960) %>%
+  arrange(first_ascent_year) %>%
+  View()
+```
+
+Count countries associated with first ascents
+
+Collapsed "W Germany" into "Germany"
+
+```{r}
+peaks_fixed %>%
   filter(!is.na(first_ascent_country)) %>%
+  separate_rows(first_ascent_country, sep = ",") %>%
+  mutate(
+    first_ascent_country = str_squish(first_ascent_country),
+    first_ascent_country = ifelse(
+      first_ascent_country == "W Germany",
+      "Germany",
+      first_ascent_country
+    )
+  ) %>%
+  count(first_ascent_country, name = "first_ascents", sort = TRUE) %>%
   mutate(first_ascent_country = fct_reorder(first_ascent_country, first_ascents)) %>%
   top_n(20, wt = first_ascents) %>%
   ggplot(aes(first_ascents, first_ascent_country, fill = first_ascent_country)) +
@@ -105,6 +123,46 @@ peaks_fixed %>%
        y = "") +
   theme(legend.position = "none")
 ```
+
+Have the countries involved in first ascents changed over time?
+
+```{r}
+peaks_fixed %>%
+  filter(!is.na(first_ascent_country),
+         first_ascent_year >= 1910) %>%
+  separate_rows(first_ascent_country, sep = ",") %>%
+  mutate(
+    first_ascent_country = str_squish(first_ascent_country),
+    first_ascent_country = ifelse(
+      first_ascent_country == "W Germany",
+      "Germany",
+      first_ascent_country
+    ),
+    first_ascent_decade = first_ascent_year %/% 10 * 10,
+    first_ascent_country = fct_lump(first_ascent_country, 8)
+  ) %>%
+  count(first_ascent_country,
+        first_ascent_decade,
+        name = "first_ascents") %>%
+  group_by(first_ascent_decade) %>%
+  mutate(pct_of_ascents = first_ascents / sum(first_ascents)) %>%
+  ungroup() %>%
+  mutate(
+    first_ascent_country = fct_reorder(first_ascent_country, -first_ascents, sum),
+    first_ascent_country = fct_relevel(first_ascent_country, "Other", after = Inf)
+  ) %>%
+  ggplot(aes(first_ascent_decade, pct_of_ascents, fill = first_ascent_country)) +
+  geom_col() +
+  scale_x_continuous(breaks = seq(1930, 2010, 10)) +
+  scale_y_continuous(labels = percent_format(accuracy = 1)) +
+  scale_fill_fish(option = "Pseudocheilinus_tetrataenia",
+                  discrete = TRUE) +
+  facet_wrap( ~ first_ascent_country) +
+  labs(title = "Percent of first ascents involving an expedition member from this country") +
+  theme(legend.position = "none",
+        panel.grid.minor = element_blank())
+```
+
 
 
 
