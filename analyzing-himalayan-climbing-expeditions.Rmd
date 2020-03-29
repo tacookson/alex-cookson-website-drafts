@@ -10,16 +10,40 @@ topics: []
 ---  
 \  
 
-Introduction
+In this series of posts, we will analyze climbing expeditions to the Himalayas, a mountain range comprising over 50 mountains, including [Mount Everest](https://en.wikipedia.org/wiki/Mount_Everest), the highest mountain (above sea level) in the world.  
+\  
+
+This is *Part 1* of a three-part series:
+
+- Part 1: Peaks, heights, and first ascents
+- Part 2: Everest expeditions
+- Part 3: Himalayan expeditions overall (excluding Mount Everest)  
+\  
+
+
+## The Himalayan Database
+
+The data comes from [The Himalayan Database &copy;](https://www.himalayandatabase.com/), a truly impressive and comprehensive dataset with records on over 10,000 climbing expeditions from 1905 to 2019 for more than 450 significant peaks in the Nepal Himalayas. According to the database website:
+
+> The Himalayan Database is a compilation of records for all expeditions that have climbed in the Nepal Himalaya. The database is based on the expedition archives of Elizabeth Hawley, a longtime journalist based in Kathmandu, and it is supplemented by information gathered from books, alpine journals and correspondence with Himalayan climbers.
+
+You can download a program from the website to explore the database, but it uses Microsoft Visual FoxPro, which I couldn't get to work. I read the database tables directly and converted them into CSV files.  
+\  
 
 
 ## Setup
 
-First, we'll load the `tidyverse` and import our data.
+First, we'll load the `tidyverse` and some other useful packages:
+
+- `fishualize` for ggplot2 colour palettes inspired by fish. A big thank you to [Nina Schiettekatte](https://twitter.com/NinaSchiett/status/1180070737471852545) for making this package and [Maia Pelletier](https://twitter.com/MaiaPelletier/status/1242869023437664259) for introducing it to me!
+- `glue` for combining R code and character strings easily
+- `scales` for turning ugly numbers into pretty numbers (e.g., 0.3 to 30%)
+
+We'll also set a default `ggplot2` theme and import our data.
 
 ```{r, warning = FALSE, message = FALSE}
 library(tidyverse)
-library(fishualize) # Cool colour palettes
+library(fishualize)
 library(glue)
 library(scales)
 
@@ -34,22 +58,49 @@ members <- readr::read_csv("https://raw.githubusercontent.com/tacookson/data/mas
 
 ## Data inspection
 
+In this post, we're getting an overview of Himalayan peaks, so we won't dig into any expedition-specific data. We will just look at the `peaks`
+
+```{r}
+peaks %>%
+  glimpse()
+```
+
+We have the name and height of the peaks (including any alternative names), whether they've been summitted, and the year and countries associated with the first ascent for peaks that *have* been summitted. Countries are listed if an expedition member who reached the summit was a citizen of that country. It's possible for countries to have citizens in an expedition, but not listed here are part of the first ascent. For example, the first ascent of Mount Everest lists two countries -- India (for Tenzing Norgay) and New Zealand (for Edmund Hillary) -- even though non-summitting expedition members included people from the United Kingdom and Nepal.
+
+(Note: [there is some debate about Tenzing Norgay's nationality](https://en.wikipedia.org/wiki/Talk%3ATenzing_Norgay#Tenzing_Norgay's_nationality). I'm not even close to an expert on this topic, so I will defer to the records in the Himalayan Database, which list his citizenship as "India".)  
+\  
+
+
+## Research questions
+
+I'm interested in three things:
+
+1. How high are the peaks?
+2. When were they first climbed?
+3. What countries were involved in first ascents?
+
+
 How high are these peaks?
+
+Density
 
 ```{r}
 peaks %>%
   ggplot(aes(height_metres)) +
-  geom_histogram(binwidth = 100)
+  geom_density(fill = "cadetblue4", alpha = 0.5) +
+  scale_x_continuous(labels = comma_format()) +
+  scale_y_continuous(labels = percent_format()) +
+  labs(title = "How high are Himalayan peaks?")
 ```
-
-How many are climbed vs. not?
 
 ```{r}
 peaks %>%
-  count(climbing_status)
+  ggplot(aes(height_metres)) +
+  geom_histogram(binwidth = 100, fill = "cadetblue4") +
+  labs(title = "How high are Himalayan peaks?")
 ```
 
-What is different from the climbed and unclimbed peaks? Are unclimbed peaks higher?
+How many are climbed vs. not? What is different from the climbed and unclimbed peaks? Are unclimbed peaks higher?
 
 Showcase the `varwdith` argument of geom_boxplot and how to get the N in the axis label
 
@@ -71,6 +122,25 @@ peaks %>%
   theme(legend.position = "none")
 ```
 
+When were they first climbed?
+
+```{r}
+peaks %>%
+  ggplot(aes(first_ascent_year)) +
+  geom_histogram()
+```
+
+Find mistaken record and look up the expedition_id from `expeditions` to see if it has the correct year
+
+```{r}
+peaks %>%
+  filter(first_ascent_year < 1000) %>%
+  left_join(
+    expeditions %>% select(expedition_id, year),
+    by = c("first_ascent_expedition_id" = "expedition_id")
+  )
+```
+
 Fix first ascent year for Sharpu II (code SPH2)
 
 ```{r}
@@ -83,21 +153,10 @@ Visualize distribution of first ascent years
 ```{r}
 peaks_fixed %>%
   ggplot(aes(first_ascent_year)) +
-  geom_histogram(binwidth = 5)
+  geom_histogram(binwidth = 5, fill = "cadetblue4")
 ```
 
-What peaks were first summited before 1950
-
-```{r}
-peaks_fixed %>%
-  filter(first_ascent_year < 1960) %>%
-  arrange(first_ascent_year) %>%
-  View()
-```
-
-Count countries associated with first ascents
-
-Collapsed "W Germany" into "Germany"
+Count countries associated with first ascents (collapsed "W Germany" into "Germany")
 
 ```{r}
 peaks_fixed %>%
@@ -158,9 +217,14 @@ peaks_fixed %>%
   scale_fill_fish(option = "Pseudocheilinus_tetrataenia",
                   discrete = TRUE) +
   facet_wrap( ~ first_ascent_country) +
-  labs(title = "Percent of first ascents involving an expedition member from this country") +
+  labs(title = "Percent of first ascents involving an expedition member from this country",
+       x = "Decade of first ascent",
+       y = "") +
   theme(legend.position = "none",
-        panel.grid.minor = element_blank())
+        panel.grid.major.x = element_blank(),
+        panel.grid.minor = element_blank(),
+        strip.text = element_text(colour = "black"),
+        strip.background = element_blank())
 ```
 
 
