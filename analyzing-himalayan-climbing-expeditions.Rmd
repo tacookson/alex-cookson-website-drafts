@@ -347,6 +347,41 @@ We've learned some interesting things about Himalayan peaks and some of the pion
 
 ## Appendix
 
+Season of first ascents
+
+```{r}
+expeditions %>%
+  mutate(first_ascent = expedition_id %in% peaks_fixed$first_ascent_expedition_id) %>%
+  count(first_ascent, season) %>%
+  group_by(first_ascent) %>%
+  mutate(pct = n / sum(n)) %>%
+  ungroup() %>%
+  filter(season != "Unknown") %>%
+  mutate(season = fct_relevel(season,
+                              "Spring",
+                              "Summer",
+                              "Autumn",
+                              "Winter"),
+         first_ascent = ifelse(first_ascent, "First Ascent", "Not First Ascent")) %>%
+  ggplot(aes(season, pct, fill = season)) +
+  geom_col() +
+  scale_y_continuous(labels = label_percent(accuracy = 1)) +
+  scale_fill_fish(option = "Pseudocheilinus_tetrataenia",
+                  discrete = TRUE,
+                  direction = -1) +
+  facet_wrap( ~ first_ascent) +
+  labs(title = "Most expeditions take place in the Spring or Autumn",
+       subtitle = "Based on 10,364 expeditions from 1905-2019",
+       caption = "Source: The Himalayan Database",
+       x = "Season",
+       y = "Percent of expeditions") +
+  theme(legend.position = "none",
+        text = element_text(family = "Bahnschrift"),
+        strip.text = element_text(colour = "black"),
+        strip.background = element_blank())
+```
+
+
 ### Preliminary Questions
 
 Peaks:
