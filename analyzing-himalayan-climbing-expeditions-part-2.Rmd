@@ -1,0 +1,165 @@
+---
+title: Analyzing Himalayan climbing expeditions
+author: Alex Cookson
+date: '2020-04-01'
+slug: analyzing-himalayan-climbing-expeditions
+categories: []
+tags: []
+description: ''
+topics: []
+---  
+\  
+
+In this series of posts, we will analyze climbing expeditions to the Himalayas, a mountain range comprising over 50 mountains, including [Mount Everest](https://en.wikipedia.org/wiki/Mount_Everest), the highest mountain (above sea level) in the world.  
+\  
+
+This is *Part 2* of a three-part series:
+
+- [Part 1 looked at Himalayan peaks and their first ascents](https://www.alexcookson.com/post/analyzing-himalayan-peaks-first-ascents/)
+- Part 2 (this post) looks at Everest expeditions
+- Part 3 will look at Himalayan expeditions overall (excluding Mount Everest) *(coming soon)*  
+\  
+
+This post will focus on expeditions to Mount Everest, the tallest mountain in the world and the most popular destination for Himalayan expeditions.
+\  
+
+
+## Setup
+
+First, we'll load the `tidyverse` and some other useful packages:
+
+- `fishualize` for ggplot2 colour palettes [inspired by fish](https://cran.r-project.org/web/packages/fishualize/vignettes/overview_colors.html)
+- `scales` for turning ugly numbers into pretty numbers (e.g., 0.3 to 30%)
+- `extrafont` for additional fonts to use in graphs
+
+We'll also set a default `ggplot2` theme and import our data.
+
+```{r, warning = FALSE, message = FALSE}
+library(tidyverse)
+library(fishualize)
+library(scales)
+library(extrafont)
+
+theme_set(theme_light())
+
+peaks <- readr::read_csv("https://raw.githubusercontent.com/tacookson/data/master/himalayan-expeditions/peaks.csv")
+expeditions <- readr::read_csv("https://raw.githubusercontent.com/tacookson/data/master/himalayan-expeditions/expeditions.csv")
+members <- readr::read_csv("https://raw.githubusercontent.com/tacookson/data/master/himalayan-expeditions/members.csv")
+```  
+\  
+
+
+## Data inspection
+
+We have two data tables to investigate: `expeditions`, which has data on entire climbing expeditions, and `members`, which has data on the individual members of those expeditions.
+
+Let's start with **expeditions**.
+
+```{r}
+expeditions %>%
+  glimpse()
+```
+
+`expeditions` has four different types of data:
+
+1. Basic data on the peak. We could bring in the `peaks` table if we wanted information like alternative names or heights.
+2. Important expedition dates -- when they reached basecamp, when they reached the summit, and when the expedition ended
+3. "Outcomes", including elevation highpoint and the reason for the expedition ending
+4. Miscellaneous additional data, like number of members, deaths, and whether oxygen was used  
+\  
+
+What about expedition **members**?
+
+```{r}
+members %>%
+  glimpse()
+```
+
+`members` has NUMBER types of data:
+
+1. Some of the same data from the `peaks` and `expeditions` tables, here for convenience
+2. Demographic data, like age and sex
+3. Individual outcomes, like elevation high and macabre "outcomes" like injury and death
+4. Miscellaneous additional data, like expedition role and whether the individual used oxygen
+
+
+
+
+
+Number of expeditions
+
+```{r}
+expeditions %>%
+  count(peak_id, peak_name, name = "expeditions") %>%
+  mutate(peak_name = fct_reorder(peak_name, expeditions)) %>%
+  top_n(20, wt = expeditions) %>%
+  ggplot(aes(expeditions, peak_name, fill = peak_name)) +
+  geom_col() +
+  scale_fill_fish(option = "Pseudocheilinus_tetrataenia",
+                  discrete = TRUE) +
+  theme(legend.position = "none",
+        text = element_text(family = "Bahnschrift"))
+```
+
+Create Everest datasets
+
+```{r}
+everest_expeditions <- expeditions %>%
+  filter(peak_name == "Everest")
+
+everest_members <- members %>%
+  filter(peak_name == "Everest")
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## Conclusion
+
+CONCLUSION TEXT
+
+If you enjoyed this post, [let me know](https://twitter.com/alexcookson) on Twitter and read the other posts analyzing this dataset:
+
+- [Part 1 looked at Himalayan peaks and their first ascents](https://www.alexcookson.com/post/analyzing-himalayan-peaks-first-ascents/)
+- Part 3 will look at Himalayan expeditions overall (excluding Mount Everest) *(coming soon)*
+
+
+
+
+
+
+
+## Appendix
+
+Expeditions:
+
+- What peaks were the most popular to climb?
+- How big are expeditions?
+- How many people are typically hired?
+- What are the success rates of expeditions?
+- Why do expeditions fail?
+- What is the threat rate for injuries and deaths?
+- Are there any particularly dangerous peaks?
+- What proportion of expeditions use oxygen?
+
+
+Members:
+
+- What's the typical composition of expedition members? Age, sex, citizenship?
+- Are any particular mountains more popular with certain countries?
+- Are there any particularly dangerous expedition roles
+- What types of injuries and causes of death are there?
+- Are there any particularly dangerous elevations?
+- Are younger climbers more likely to attempt solo climbs or not use oxygen?
