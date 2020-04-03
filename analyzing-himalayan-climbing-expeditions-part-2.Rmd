@@ -10,7 +10,7 @@ topics: []
 ---  
 \  
 
-In this series of posts, we will analyze climbing expeditions to the Himalayas, a mountain range comprising over 50 mountains, including [Mount Everest](https://en.wikipedia.org/wiki/Mount_Everest), the highest mountain (above sea level) in the world.  
+In this series of posts, we will analyze climbing expeditions to the Himalayas, a mountain range comprising over 50 mountains, including [Mount Everest](https://en.wikipedia.org/wiki/Mount_Everest), the tallest mountain in the world.  
 \  
 
 This is *Part 2* of a three-part series:
@@ -20,7 +20,14 @@ This is *Part 2* of a three-part series:
 - Part 3 will look at Himalayan expeditions overall (excluding Mount Everest) *(coming soon)*  
 \  
 
-This post will focus on expeditions to Mount Everest, the tallest mountain in the world and the most popular destination for Himalayan expeditions.
+This post will focus on expeditions to Mount Everest, the most famous Himalayan peak and the tallest mountain in the world. Everest expeditions have received some mainstream media attention fairly recently, with [reports](https://www.nationalgeographic.com/adventure/2019/05/everest-season-deaths-controversy-crowding/) [about](https://www.nytimes.com/2019/05/26/world/asia/mount-everest-deaths.html) [overcrowding](https://www.bbc.com/news/world-asia-48401491) and whether or not this overcrowding plays a role in the deaths of some climbers. (It's an interesting topic -- I recommend reading the linked articles.)
+
+We will do our own exploration of Everest expeditions using data from [The Himalayan Database](https://www.himalayandatabase.com/). In particular, we'll investigate:
+
+- How popular is Mount Everest?
+- When do people climb?
+- What kind of people climb?
+- How dangerous is it?  
 \  
 
 
@@ -31,14 +38,16 @@ First, we'll load the `tidyverse` and some other useful packages:
 - `fishualize` for ggplot2 colour palettes [inspired by fish](https://cran.r-project.org/web/packages/fishualize/vignettes/overview_colors.html)
 - `scales` for turning ugly numbers into pretty numbers (e.g., 0.3 to 30%)
 - `extrafont` for additional fonts to use in graphs
+- `ggtext`, which "provides rich-text (basic HTML and Markdown) support for ggplot2" (from the package's [GitHub](https://github.com/wilkelab/ggtext))
 
 We'll also set a default `ggplot2` theme and import our data.
 
-```{r, warning = FALSE, message = FALSE}
+```{r setup, warning = FALSE, message = FALSE}
 library(tidyverse)
 library(fishualize)
 library(scales)
 library(extrafont)
+library(ggtext)
 
 theme_set(theme_light())
 
@@ -55,12 +64,12 @@ We have two data tables to investigate: `expeditions`, which has data on entire 
 
 Let's start with **expeditions**.
 
-```{r}
+```{r glimpse-expeditions}
 expeditions %>%
   glimpse()
 ```
 
-`expeditions` has four different types of data:
+`expeditions` has four types of data:
 
 1. Basic data on the peak. We could bring in the `peaks` table if we wanted information like alternative names or heights.
 2. Important expedition dates -- when they reached basecamp, when they reached the summit, and when the expedition ended
@@ -70,48 +79,185 @@ expeditions %>%
 
 What about expedition **members**?
 
-```{r}
+```{r glimpse-members}
 members %>%
   glimpse()
 ```
 
-`members` has NUMBER types of data:
+`members` also has four types of data:
 
 1. Some of the same data from the `peaks` and `expeditions` tables, here for convenience
 2. Demographic data, like age and sex
-3. Individual outcomes, like elevation high and macabre "outcomes" like injury and death
-4. Miscellaneous additional data, like expedition role and whether the individual used oxygen
+3. Individual outcomes, like elevation high and unfortunate "outcomes" like injury and death
+4. Miscellaneous additional data, like expedition role and whether the individual used oxygen  
+\  
 
+Now that we have a general sense of our data, let's create "Everest versions" of `expeditions` and `members`. Then, we can start answering our questions.
 
-
-
-
-Number of expeditions
-
-```{r}
-expeditions %>%
-  count(peak_id, peak_name, name = "expeditions") %>%
-  mutate(peak_name = fct_reorder(peak_name, expeditions)) %>%
-  top_n(20, wt = expeditions) %>%
-  ggplot(aes(expeditions, peak_name, fill = peak_name)) +
-  geom_col() +
-  scale_fill_fish(option = "Pseudocheilinus_tetrataenia",
-                  discrete = TRUE) +
-  theme(legend.position = "none",
-        text = element_text(family = "Bahnschrift"))
-```
-
-Create Everest datasets
-
-```{r}
+```{r create-everest-dataframes}
 everest_expeditions <- expeditions %>%
   filter(peak_name == "Everest")
 
 everest_members <- members %>%
   filter(peak_name == "Everest")
+```  
+\  
+
+
+## How popular is Mount Everest?
+
+TEXT
+
+```{r graph-expeditions, fig.align = 'center', fig.width = 8, fig.asp = 0.618}
+everest_expeditions %>%
+  group_by(year) %>%
+  # Capitalizing names so they'll look nice in the graph
+  summarise(Expeditions = n(),
+            Climbers = sum(members + hired_staff)) %>%
+  ungroup() %>%
+  # There are implicit zeros, especially before 1950
+  # Use complete() to turn them into explicit zeros
+  complete(year = 1920:2019,
+           fill = list(Expeditions = 0, Climbers = 0)) %>%
+  gather("category", "number", -year) %>%
+  ggplot(aes(year, number)) +
+  geom_line(col = "#373142FF") +
+  geom_area(fill = "#373142FF", alpha = 0.7) +
+  facet_wrap( ~ category, scales = "free_y") +
+  scale_x_continuous(breaks = seq(1920, 2020, 10)) +
+  scale_y_continuous(labels = label_comma()) +
+  labs(
+    title = "Everest's popularity has soared since the 1980s",
+    caption = "Source: The Himalayan Database",
+    x = "",
+    y = ""
+  ) +
+  theme(text = element_text(family = "Bahnschrift"),
+        panel.grid.minor = element_blank(),
+        strip.text = element_text(colour = "black", size = 12),
+        strip.background = element_blank())
+```
+
+The graph itself looks like a mountain! Mount Everest has become much more popular since the 1980s, with 75-100 expeditions composed of 800-1,200 climbers in recent years.
+
+
+## Question 2
+
+Seasons
+
+```{r graph-seasons, fig.align = 'center', fig.width = 8, fig.asp = 0.8}
+everest_expeditions %>%
+  mutate(decade = year %/% 10 * 10,
+         season = fct_relevel(season, "Spring", "Summer", "Autumn", "Winter")) %>%
+  count(decade, season, name = "expeditions") %>%
+  ggplot(aes(decade, expeditions, fill = season)) +
+  geom_col() +
+  scale_fill_fish(option = "Pseudocheilinus_tetrataenia",
+                  discrete = TRUE,
+                  direction = -1) +
+  facet_wrap( ~ season) +
+  labs(title = "Spring expeditions are most common by far",
+       caption = "Source: The Himalayan Database",
+       x = "",
+       y = "") +
+  theme(legend.position = "none",
+        text = element_text(family = "Bahnschrift"),
+        panel.grid.minor.y = element_blank(),
+        strip.text = element_text(colour = "black"),
+        strip.background = element_blank())
+```
+
+Spring expeditions are by far the most common. There are almost no expeditions during the summer, likely because it is [monsoon season](https://iantaylortrekking.com/blog/what-is-the-best-time-of-year-to-trek-everest-base-camp/).
+
+[Autumn climbing](https://en.wikipedia.org/wiki/Mount_Everest#Autumn_climbing)
+
+In the 1980s, expeditions were split 50-50 between spring and autumn.
+
+
+
+## Question 3 (Composition of expeditions)
+
+TEXT
+
+```{r}
+# Total
+everest_members %>%
+  filter(!hired) %>%
+  count(citizenship, sort = TRUE) %>%
+  mutate(country = fct_lump(citizenship, 49, w = n),
+         country = fct_reorder(country, n)) %>%
+  ggplot(aes(n, country, fill = country)) +
+  geom_col() +
+  scale_fill_fish(option = "Pseudocheilinus_tetrataenia",
+                  discrete = TRUE) +
+  theme(legend.position = "none")
+
+# By Decade
+everest_members %>%
+  filter(!hired) %>%
+  count(decade = year %/% 10 * 10, citizenship, sort = TRUE) %>%
+  mutate(country = fct_lump(citizenship, 19, w = n),
+         country = fct_reorder(country, n)) %>%
+  ggplot(aes(n, country, fill = country)) +
+  geom_col() +
+  scale_fill_fish(option = "Pseudocheilinus_tetrataenia",
+                  discrete = TRUE) +
+  facet_wrap( ~ decade) +
+  theme(legend.position = "none")
+
+everest_members %>%
+  mutate(country_code = countrycode::countrycode(citizenship, "country.name", "iso3c", warn = FALSE),
+         continent = countrycode::countrycode(country_code, "iso3c", "continent")) %>%
+  count(citizenship, continent, sort = TRUE) %>%
+  mutate(country = fct_lump(citizenship, 29, w = n),
+         country = fct_reorder(country, n)) %>%
+  ggplot(aes(n, country, fill = continent)) +
+  geom_col() +
+  scale_fill_fish(option = "Pseudocheilinus_tetrataenia",
+                  discrete = TRUE)
+```
+
+Age
+
+```{r}
+# Age and death rates
+everest_members %>%
+  group_by(age = age %/% 10 * 10) %>%
+  summarise(injury_rate = mean(injured),
+            death_rate = mean(died),
+            n = n()) %>%
+  ungroup() %>%
+  ggplot(aes(age, death_rate)) +
+  geom_point(aes(size = n))
+
+# Count of injury types
+everest_members %>%
+  filter(injured) %>%
+  count(injury_type, sort = TRUE)
+
+# Use of oxygen
+everest_members %>%
+  count(sex, oxygen_used) %>%
+  group_by(sex) %>%
+  mutate(pct = n / sum(n)) %>%
+  ungroup()
+
+everest_expeditions %>%
+  count(termination_reason) %>%
+  mutate(termination_reason = case_when(str_detect(termination_reason, "Route technically") ~ "Route technically too difficult",
+                                        str_detect(termination_reason, "Bad conditions") ~ "Bad conditions",
+                                        TRUE ~ termination_reason),
+         termination_reason = fct_reorder(termination_reason, n)) %>%
+  ggplot(aes(n, termination_reason, fill = termination_reason)) +
+  geom_col() +
+  theme(legend.position = "none")
 ```
 
 
+
+
+
+## Question 4 (How dangerous)
 
 
 
@@ -148,7 +294,7 @@ Expeditions:
 - What peaks were the most popular to climb?
 - How big are expeditions?
 - How many people are typically hired?
-- What are the success rates of expeditions?
+- What are the success rates of expeditions for different peaks?
 - Why do expeditions fail?
 - What is the threat rate for injuries and deaths?
 - Are there any particularly dangerous peaks?
@@ -163,3 +309,29 @@ Members:
 - What types of injuries and causes of death are there?
 - Are there any particularly dangerous elevations?
 - Are younger climbers more likely to attempt solo climbs or not use oxygen?
+
+
+Number of expeditions by peak
+
+```{r graph-expeditions-by-peak, eval = FALSE}
+expeditions %>%
+  inner_join(peaks %>% select(peak_id, height_metres), by = "peak_id") %>%
+  mutate(eight_thousander = height_metres >= 8000) %>%
+  count(peak_id, peak_name, eight_thousander, name = "expeditions") %>%
+  mutate(peak_name = fct_reorder(peak_name, expeditions)) %>%
+  top_n(20, wt = expeditions) %>%
+  ggplot(aes(expeditions, peak_name, fill = eight_thousander)) +
+  geom_col() +
+  scale_x_continuous(labels = label_comma()) +
+  scale_fill_manual(values = c("#6baed6", "#08519c")) +
+  labs(title = "<span style = 'color:#08519c'>**8000ers**</span> are more popular than <span style = 'color:#6baed6'>**other**</span> Himalayan mountains",
+       subtitle = "All expeditions from 1905-2019",
+       caption = "Source: The Himalayan Database",
+       x = "Number of expeditions",
+       y = "") +
+  theme(
+    legend.position = "none",
+    text = element_text(family = "Bahnschrift"),
+    plot.title = element_markdown()
+  )
+```
