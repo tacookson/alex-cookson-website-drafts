@@ -252,3 +252,35 @@ avg_tickets %>%
        y = "") +
   theme(panel.grid.minor = element_blank())
 ```
+
+
+Cumulative gross over week of run
+
+```{r}
+grosses_processed %>%
+  mutate(show_and_run = paste0(show, " (Run ", run_number, ")")) %>%
+  group_by(show_and_run) %>%
+  mutate(weekly_gross = coalesce(weekly_gross, 0),
+         cumulative_gross = cumsum(weekly_gross)) %>%
+  ungroup() %>%
+  ggplot(aes(week_of_run, cumulative_gross, group = show_and_run)) +
+  geom_line(alpha = 0.8) +
+  scale_y_continuous(labels = label_dollar(scale = 1/1e6, suffix = "M"))
+```
+
+
+```{r}
+grosses_processed %>%
+  mutate(show_and_run = paste0(show, " (Run ", run_number, ")")) %>%
+  group_by(show_and_run) %>%
+  summarise(total_grosses = sum(weekly_gross, na.rm = TRUE),
+            avg_weekly_gross = mean(weekly_gross, na.rm = TRUE),
+            length_of_run = max(week_of_run),
+            most_recent_week = max(week_ending)) %>%
+  top_n(20, wt = avg_weekly_gross) %>%
+  mutate(show_and_run = fct_reorder(show_and_run, avg_weekly_gross)) %>%
+  ggplot(aes(avg_weekly_gross, show_and_run)) +
+  geom_col() +
+  scale_x_continuous(labels = dollar_format(scale = 1/1e6, suffix = "M"))
+```
+

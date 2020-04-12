@@ -1,0 +1,127 @@
+---
+title: Analyzing Himalayan climbing expeditions
+author: Alex Cookson
+date: '2020-04-10'
+slug: analyzing-himalayan-climbing-expeditions
+categories: []
+tags: []
+description: ''
+topics: []
+---  
+\  
+
+In this series of posts, we will analyze climbing expeditions to the Himalayas, a mountain range comprising over 50 mountains, including [Mount Everest](https://en.wikipedia.org/wiki/Mount_Everest), the tallest mountain in the world.  
+\  
+
+This is *Part 3* of a three-part series:
+
+- [Part 1 looked at Himalayan peaks and their first ascents](https://www.alexcookson.com/post/analyzing-himalayan-peaks-first-ascents/)
+- [Part 2 looked at how dangerous it is to climb Mount Everest](https://www.alexcookson.com/post/how-dangerous-is-climbing-mount-everest/)
+- Part 3 (this post) looks at Himalayan expeditions overall (excluding Mount Everest) 
+\  
+
+This post will focus on expeditions that *didn't* go to Mount Everest. Specifically we'll answer these questions:
+
+- Q1?
+- Q2?
+- Q3?
+
+
+## Setup
+
+First, we'll load the `tidyverse` and some other useful packages:
+
+- `fishualize` for ggplot2 colour palettes [inspired by fish](https://cran.r-project.org/web/packages/fishualize/vignettes/overview_colors.html)
+- `scales` for turning ugly numbers into pretty numbers (e.g., 0.3 to 30%)
+- `extrafont` for additional fonts to use in graphs
+- `ggtext`, which "provides rich-text (basic HTML and Markdown) support for ggplot2" (from the package's [GitHub](https://github.com/wilkelab/ggtext))
+
+We'll also set a default `ggplot2` theme and import our data.
+
+```{r setup, warning = FALSE, message = FALSE}
+library(tidyverse)
+library(fishualize)
+library(scales)
+library(extrafont)
+library(ggtext)
+
+theme_set(theme_light())
+
+peaks <- readr::read_csv("https://raw.githubusercontent.com/tacookson/data/master/himalayan-expeditions/peaks.csv")
+expeditions <- readr::read_csv("https://raw.githubusercontent.com/tacookson/data/master/himalayan-expeditions/expeditions.csv")
+members <- readr::read_csv("https://raw.githubusercontent.com/tacookson/data/master/himalayan-expeditions/members.csv")
+```  
+\  
+
+We already have a good sense of what the data contains from earlier posts in this series, so we won't inspect the data. If you're reading this out of order, I encourage you to start with [Part 1](https://www.alexcookson.com/post/analyzing-himalayan-peaks-first-ascents/) or [Part 2](https://www.alexcookson.com/post/how-dangerous-is-climbing-mount-everest/).  
+\  
+
+
+## What do people climb -- other than Everest?
+
+TEXT
+
+```{r expeditions-by-peak, eval = FALSE}
+expeditions %>%
+  inner_join(peaks %>% select(peak_id, height_metres), by = "peak_id") %>%
+  filter(peak_name != "Everest") %>%
+  mutate(eight_thousander = height_metres >= 8000) %>%
+  count(peak_id, peak_name, eight_thousander, name = "expeditions") %>%
+  mutate(peak_name = fct_reorder(peak_name, expeditions)) %>%
+  top_n(20, wt = expeditions) %>%
+  ggplot(aes(expeditions, peak_name, fill = eight_thousander)) +
+  geom_col() +
+  scale_x_continuous(labels = label_comma()) +
+  scale_fill_manual(values = c("#6baed6", "#08519c")) +
+  labs(title = "<span style = 'color:#08519c'>**8000ers**</span> and <span style = 'color:#6baed6'>**other**</span> Himalayan mountains are both popular",
+       subtitle = "Number of expeditions from 1905-2019",
+       caption = "Source: The Himalayan Database",
+       x = "",
+       y = "") +
+  theme(
+    legend.position = "none",
+    text = element_text(family = "Bahnschrift"),
+    plot.title = element_markdown(),
+    axis.text = element_text(size = 10)
+  )
+```
+
+
+
+## Conclusion
+
+
+If you're curious about these (or other questions!), please use this data to look into them yourself and [let me know](https://twitter.com/alexcookson) on Twitter.
+
+And, if you enjoyed this post, I encourage you to read the other posts analyzing this dataset:
+
+- [Part 1 looked at Himalayan peaks and their first ascents](https://www.alexcookson.com/post/analyzing-himalayan-peaks-first-ascents/)
+- [Part 2 looked at how dangerous it is to climb Mount Everest](https://www.alexcookson.com/post/how-dangerous-is-climbing-mount-everest/)
+
+
+
+
+
+
+
+## Appendix
+
+Expeditions:
+
+- How big are expeditions?
+- How many people are typically hired?
+- What are the success rates of expeditions for different peaks?
+- Why do expeditions fail?
+- What is the threat rate for injuries and deaths?
+- Are there any particularly dangerous peaks?
+- What proportion of expeditions use oxygen?
+
+
+Members:
+
+- What's the typical composition of expedition members? Age, sex, citizenship?
+- Are any particular mountains more popular with certain countries?
+- Are there any particularly dangerous expedition roles?
+- What types of injuries and causes of death are there?
+- Are there any particularly dangerous elevations?
+- Are younger climbers more likely to attempt solo climbs or not use oxygen?
