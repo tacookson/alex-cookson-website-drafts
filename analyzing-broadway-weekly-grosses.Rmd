@@ -284,3 +284,14 @@ grosses_processed %>%
   scale_x_continuous(labels = dollar_format(scale = 1/1e6, suffix = "M"))
 ```
 
+
+### Appendix
+
+Questions to ask:
+
+- What is the most successful Broadway show ever?
+- What are the box office duds?
+- How have ticket prices changes over time?
+- Which shows have had the longest runs?
+- Do particular theatres host more/less popular shows?
+- How successful will Hamilton be?
