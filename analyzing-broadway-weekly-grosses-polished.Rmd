@@ -12,6 +12,11 @@ topics: []
 
 INTRODUCTORY TEXT.
 
+Questions to ask:
+
+- What is the most successful Broadway show?
+- How have ticket prices changed over time?
+
 
 ## Setup
 
@@ -29,25 +34,30 @@ theme_set(theme_light())
 # Adding guess_max = 10000 show readr gets the column specifications right
 grosses_raw <- readr::read_csv("https://raw.githubusercontent.com/tacookson/data/master/broadway-grosses/grosses.csv",
                             guess_max = 10000)
-synopses <- readr::read_csv("https://raw.githubusercontent.com/tacookson/data/master/broadway-grosses/synopses.csv")
 cpi_raw <- readr::read_csv("https://raw.githubusercontent.com/tacookson/data/master/broadway-grosses/cpi.csv")
 ```
 
 
-Missing data
+## Data inspection
 
-```{r percent-missing-data}
-grosses_raw %>%
-  summarise_all(~ mean(is.na(.))) %>%
-  gather("variable", "pct_missing") %>%
-  filter(pct_missing > 0) %>%
-  arrange(-pct_missing)
+```{r inspect-grosses}
+glimpse(grosses_raw)
 ```
+
+```{r inspect-cpi}
+glimpse(cpi_raw)
+```
+
 
 
 ### Data cleaning
 
-Cleaning grosses data
+Cleaning grosses data:
+
+- Zeros for weeks when there were no performances (should be NA)
+- Top ticket prices for weeks with no performances (should be NA)
+- Zeros for, e.g., weekly gross and seats sold, during weeks that there were performances (missing data from source)
+-
 
 ```{r implicit-missing-values}
 grosses_clean <- grosses_raw %>%
@@ -70,116 +80,37 @@ grosses_clean <- grosses_raw %>%
 Creating week of show variable
 
 ```{r fix-run-weeks}
-calculate_run_week <- function(x) {
+grosses_processed <- grosses_clean %>%
+  group_by(show) %>%
+  mutate(run_number = cumsum(row_number() == 1 |
+                               week_ending - lag(week_ending) >= 90)) %>%
+  group_by(show, run_number) %>%
+  mutate(week_of_run = row_number()) %>%
+  ungroup()
+```
+
+```{r}
+pre_1985_starts <- readr::read_csv("https://raw.githubusercontent.com/tacookson/data/master/broadway-grosses/pre-1985-starts.csv")
+
+calculate_weeks_since_start <- function(x) {
   as.integer(pmax(1, difftime("1985-06-09", x, units = "weeks")))
 }
 
-grosses_processed <- grosses_clean %>%
-  # Calculate week of run for shows at the beginning of dataset
-  # Starting manually found at Internet Broadway Databse (https://www.ibdb.com/)
-  mutate(
-    week_of_run = case_when(
-      week_ending != "1985-06-09" ~ NA_integer_,
-      show == "42nd Street" ~ calculate_run_week("1980-08-18"),
-      show == "A Chorus Line" ~ calculate_run_week("1975-07-25"),
-      show == "Aren't We All?" ~ calculate_run_week("1985-04-29"),
-      show == "Arms and the Man" ~ calculate_run_week("1985-05-30"),
-      show == "As Is" ~ calculate_run_week("1985-05-01"),
-      show == "Big River" ~ calculate_run_week("1985-04-25"),
-      show == "Biloxi Blues" ~ calculate_run_week("1985-03-28"),
-      show == "Brighton Beach Memoirs" ~ calculate_run_week("1983-03-27"),
-      show == "Cats" ~ calculate_run_week("1982-10-07"),
-      show == "Doubles" ~ calculate_run_week("1985-05-08"),
-      show == "Grind" ~ calculate_run_week("1985-04-16"),
-      show == "La Cage aux Folles" ~ calculate_run_week("1983-08-09"),
-      show == "Leader of the Pack" ~ calculate_run_week("1985-02-21"),
-      show == "Oh! Calcutta!" ~ calculate_run_week("1976-09-24"),
-      show == "Singin' in the Rain" ~ calculate_run_week("1985-06-13"),
-      show == "Sunday in the Park with George" ~ calculate_run_week("1984-04-02"),
-      show == "The King and I" ~ calculate_run_week("1984-12-26"),
-      show == "The Odd Couple" ~ calculate_run_week("1985-06-04"),
-      show == "The Tap Dance Kid" ~ calculate_run_week("1983-11-16"),
-      TRUE ~ NA_integer_
-    )
-  ) %>%
-  group_by(show) %>%
-  arrange(week_ending) %>%
-  mutate(
-    # Find the first week of a run
-    # Either earliest week ending for first run
-    # OR earliest week ending more than 90 days after previous week ending
-    first_week = row_number() == 1 | week_ending - lag(week_ending) > 90,
-    # Increment each week by one (but take original shows into account)
-    week_of_run = cumsum(ifelse(
-      is.na(week_of_run),
-      as.integer(week_ending - lag(week_ending) <= 90),
-      week_of_run
-    )),
-    # Convert anything beyond 1st run to NA
-    # Ffirst-week shows that have multiple runs don't have a counter that keeps going
-    week_of_run = ifelse(cumsum(first_week) > 1, NA_integer_, week_of_run)
-  ) %>%
-  # Group by starting week of each run and calculate week of run
-  group_by(show, run_number = cumsum(first_week)) %>%
-  mutate(week_of_run = ifelse(is.na(week_of_run), row_number(), week_of_run)) %>%
-  ungroup() %>%
-  select(-first_week)
-```
-
-
-Visualize show runs
-
-```{r longest-runs}
-runs_timeline <- grosses_processed %>%
-  group_by(show) %>%
-  mutate(max_run_number = max(run_number),
-         total_weeks = n()) %>%
-  ungroup() %>%
-  group_by(show, run_number, max_run_number, total_weeks) %>%
-  summarise(start = min(week_ending),
-            end = max(week_ending)) %>%
-  ungroup() %>%
-  filter(dense_rank(desc(total_weeks)) <= 20) %>%
-  mutate(show = fct_reorder(show, total_weeks, max)) %>%
-  pivot_longer(start:end, names_to = "marker", values_to = "date") %>%
-  mutate(still_playing = date == max(date))
-
-runs_labels <- runs_timeline %>%
+pre_1985_starts_calculated <- grosses_processed %>%
   group_by(show, run_number) %>%
-  summarise(label_date = min(date)) %>%
-  ungroup()
+  filter(min(week_ending) == "1985-06-09") %>%
+  ungroup() %>%
+  select(week_ending, show) %>%
+  left_join(pre_1985_starts, by = "show") %>%
+  group_by(show) %>%
+  mutate(week_of_run_originals = calculate_weeks_since_start(start_date) + row_number()) %>%
+  ungroup() %>%
+  select(week_ending, show, week_of_run_originals)
 
-runs_timeline %>%
-  ggplot(aes(date, show)) +
-  geom_line(aes(group = interaction(show, run_number)),
-            size = 1,
-            col = "#225ea8") +
-  geom_point(size = 3,
-             col = "#225ea8") +
-  geom_point(data = runs_timeline %>% filter(still_playing),
-             size = 2,
-             col = "white") +
-  geom_text(data = runs_labels,
-            aes(x = label_date, y = show, label = run_number),
-            nudge_x = -200,
-            col = "grey40",
-            family = "Bahnschrift",
-            size = 8) +
-  scale_x_date(date_breaks = "1 years", date_labels = paste0("\'", "%y"), sec.axis = dup_axis()) +
-  scale_y_discrete() +
-  labs(title = "The Phaaaaaaantom of the Op-e-ra is here...to stay",
-       subtitle = "1985-Present | Hollow points are shows still in production",
-       caption = "Source: Playbill",
-       x = "",
-       y = "") +
-  theme(text = element_text(family = "Bahnschrift"),
-        plot.title = element_text(size = 40),
-        plot.subtitle = element_text(size = 20),
-        plot.caption = element_text(size = 20),
-        axis.text.x = element_text(size = 18),
-        axis.text.y = element_text(size = 24),
-        panel.grid = element_line(colour = "gray90"),
-        panel.grid.minor = element_blank())
+grosses_processed_2 <- grosses_processed %>%
+  left_join(pre_1985_starts_calculated, by = c("show", "week_ending")) %>%
+  mutate(week_of_run = coalesce(week_of_run_originals, week_of_run)) %>%
+  select(-week_of_run_originals)
 ```
 
 
@@ -365,58 +296,3 @@ cumulative_grosses_by_year %>%
     panel.grid.minor = element_blank()
   )
 ```
-
-
-
-```{r avg-weekly-gross}
-real_grosses %>%
-  mutate(show_and_run = paste0(show, " (Run ", run_number, ")")) %>%
-  group_by(show_and_run) %>%
-  summarise(total_grosses = sum(weekly_gross, na.rm = TRUE),
-            avg_weekly_gross = mean(weekly_gross, na.rm = TRUE),
-            length_of_run = max(week_of_run),
-            most_recent_week = max(week_ending)) %>%
-  top_n(20, wt = avg_weekly_gross) %>%
-  mutate(show_and_run = fct_reorder(show_and_run, avg_weekly_gross)) %>%
-  ggplot(aes(avg_weekly_gross, show_and_run)) +
-  geom_col() +
-  scale_x_continuous(labels = dollar_format(scale = 1/1e6, suffix = "M"))
-```
-
-
-Quick text analysis of synopses
-
-```{r common-synopsis-words}
-library(tidytext)
-
-synopsis_words <- synopses %>%
-  filter(!is.na(synopsis)) %>%
-  unnest_tokens(word, synopsis, token = "words") %>%
-  anti_join(stop_words, by = "word")
-
-synopsis_words %>%
-  distinct(show, word) %>%
-  count(word) %>%
-  top_n(20, wt = n) %>%
-  mutate(word = fct_reorder(word, n)) %>%
-  ggplot(aes(n, word, fill = word)) +
-  geom_col(show.legend = FALSE) +
-  scale_fill_fish(option = "Epibulus_insidiator",
-                  discrete = TRUE,
-                  direction = -1) +
-  labs(subtitle = glue::glue("Number of shows using word in their synopsis, of {sum(!is.na(synopses$synopsis))} shows with available synopses"),
-       x = "Shows using this word in their synopsis",
-       y = "")
-```
-
-
-### Appendix
-
-Questions to ask:
-
-- What is the most successful Broadway show ever?
-- What are the box office duds?
-- How have ticket prices changes over time?
-- Which shows have had the longest runs?
-- Do particular theatres host more/less popular shows?
-- How successful will Hamilton be?
