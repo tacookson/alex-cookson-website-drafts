@@ -49,7 +49,6 @@ glimpse(cpi_raw)
 ```
 
 
-
 ### Data cleaning
 
 Cleaning grosses data:
@@ -57,10 +56,9 @@ Cleaning grosses data:
 - Zeros for weeks when there were no performances (should be NA)
 - Top ticket prices for weeks with no performances (should be NA)
 - Zeros for, e.g., weekly gross and seats sold, during weeks that there were performances (missing data from source)
--
 
 ```{r implicit-missing-values}
-grosses_clean <- grosses_raw %>%
+grosses_fixed_missing <- grosses_raw %>%
   # Find weeks where shows weren't performing
   mutate(no_shows = performances + previews == 0) %>%
   # Turn metrics into missing values if there were no shows
@@ -79,8 +77,8 @@ grosses_clean <- grosses_raw %>%
 
 Creating week of show variable
 
-```{r fix-run-weeks}
-grosses_processed <- grosses_clean %>%
+```{r fix-run-weeks-1}
+grosses_clean_temp <- grosses_fixed_missing %>%
   group_by(show) %>%
   mutate(run_number = cumsum(row_number() == 1 |
                                week_ending - lag(week_ending) >= 90)) %>%
@@ -89,14 +87,14 @@ grosses_processed <- grosses_clean %>%
   ungroup()
 ```
 
-```{r}
+```{r fix-run-weeks-2}
 pre_1985_starts <- readr::read_csv("https://raw.githubusercontent.com/tacookson/data/master/broadway-grosses/pre-1985-starts.csv")
 
 calculate_weeks_since_start <- function(x) {
   as.integer(pmax(1, difftime("1985-06-09", x, units = "weeks")))
 }
 
-pre_1985_starts_calculated <- grosses_processed %>%
+pre_1985_starts_calculated <- grosses_clean_temp %>%
   group_by(show, run_number) %>%
   filter(min(week_ending) == "1985-06-09") %>%
   ungroup() %>%
@@ -107,7 +105,7 @@ pre_1985_starts_calculated <- grosses_processed %>%
   ungroup() %>%
   select(week_ending, show, week_of_run_originals)
 
-grosses_processed_2 <- grosses_processed %>%
+grosses_clean <- grosses_clean_temp %>%
   left_join(pre_1985_starts_calculated, by = c("show", "week_ending")) %>%
   mutate(week_of_run = coalesce(week_of_run_originals, week_of_run)) %>%
   select(-week_of_run_originals)
@@ -127,7 +125,7 @@ cpi <- cpi_raw %>%
 Adjusting dollar amounts to be in Jan 2020 dollars
 
 ```{r grosses-2020-dollars}
-real_grosses <- grosses_processed %>%
+real_grosses <- grosses_clean %>%
   mutate(year_month = floor_date(week_ending, unit = "month")) %>%
   left_join(cpi, by = "year_month") %>%
   mutate_at(
@@ -144,10 +142,75 @@ real_grosses <- grosses_processed %>%
 ```
 
 
+Cumulative gross over week of run
+
+```{r cumulative-gross, warning = FALSE, message = FALSE, fig.align = 'center', fig.width = 12, fig.asp = 0.618}
+cumulative_grosses_by_year <- real_grosses %>%
+  mutate(show_and_run = paste0(show, " (Run ", run_number, ")"),
+         year_of_run = week_of_run / 52) %>%
+  group_by(show_and_run) %>%
+  mutate(
+    weekly_gross = coalesce(weekly_gross, 0),
+    cumulative_gross = cumsum(weekly_gross)
+  ) %>%
+  ungroup() %>%
+  group_by(show_and_run) %>%
+  mutate(show_label = ifelse(
+    year_of_run == max(year_of_run),
+    paste0(" ", show),
+    NA_character_
+  )) %>%
+  ungroup() %>%
+  mutate(show_and_run = fct_reorder(show_and_run, year_of_run, .fun = max))
+
+top_10_grossing <- cumulative_grosses_by_year %>%
+  group_by(show_and_run) %>%
+  summarise(show_total_gross = sum(weekly_gross)) %>%
+  ungroup() %>%
+  top_n(10, wt = show_total_gross) %>%
+  pull(show_and_run)
+
+cumulative_grosses_by_year %>%
+  filter(show_and_run %in% top_10_grossing) %>%
+  ggplot(aes(year_of_run, cumulative_gross, col = show_and_run)) +
+  geom_line(size = 0.5) +
+  geom_label(
+    aes(label = show_label),
+    size = 3,
+    family = "Bahnschrift",
+    fontface = "bold",
+    hjust = 0,
+    vjust = 0,
+    label.size = NA,
+    label.padding = unit(0.01, "lines"),
+    label.r = unit(0.5, "lines")
+  ) +
+  scale_x_continuous(breaks = seq(0, 40, 5)) +
+  scale_y_continuous(labels = label_dollar(scale = 1 / 1e6, suffix = "M")) +
+  scale_colour_fish(option = "Epibulus_insidiator",
+                    discrete = TRUE,
+                    direction = 1) +
+  expand_limits(x = 40) +
+  labs(
+    title = "Could Hamilton overtake The Lion King in...20 years?",
+    subtitle = paste0("Cumulative box office receipts (Jan. 2020 dollars) for top 10 grossing shows since 1985"),
+    caption = paste0("Source: Playbill\n",
+                     "Note: Partial data for Cats, which started in 1982 (this data begins in 1985)"),
+    x = "Year of run",
+    y = ""
+  ) +
+  theme(
+    legend.position = "none",
+    text = element_text(family = "Bahnschrift"),
+    panel.grid.minor = element_blank()
+  )
+```
+
+
 Visualize progression of average top ticket prices
 
 ```{r top-ticket-prices}
-top_tickets <- grosses_processed %>%
+top_tickets <- grosses_clean %>%
   mutate(year = year(week_ending)) %>%
   filter(year >= 1996,
          !is.na(top_ticket_price)) %>%
@@ -229,70 +292,4 @@ avg_tickets %>%
        x = "",
        y = "") +
   theme(panel.grid.minor = element_blank())
-```
-
-
-Cumulative gross over week of run
-
-```{r cumulative-gross, warning = FALSE, message = FALSE, fig.align = 'center', fig.width = 12, fig.asp = 0.618}
-cumulative_grosses_by_year <- real_grosses %>%
-  mutate(show_and_run = paste0(show, " (Run ", run_number, ")"),
-         year_of_run = week_of_run / 52) %>%
-  group_by(show_and_run) %>%
-  mutate(
-    weekly_gross = coalesce(weekly_gross, 0),
-    cumulative_gross = cumsum(weekly_gross)
-  ) %>%
-  ungroup() %>%
-  group_by(show_and_run) %>%
-  mutate(show_label = ifelse(
-    year_of_run == max(year_of_run),
-    paste0(" ", show),
-    NA_character_
-  )) %>%
-  ungroup() %>%
-  mutate(show_and_run = fct_reorder(show_and_run, year_of_run, .fun = max))
-
-top_10_grossing <- cumulative_grosses_by_year %>%
-  group_by(show_and_run) %>%
-  summarise(show_total_gross = sum(weekly_gross)) %>%
-  ungroup() %>%
-  top_n(10, wt = show_total_gross) %>%
-  pull(show_and_run)
-
-cumulative_grosses_by_year %>%
-  filter(show_and_run %in% top_10_grossing) %>%
-  ggplot(aes(year_of_run, cumulative_gross, col = show_and_run)) +
-  geom_line(size = 0.5) +
-  geom_label(
-    aes(label = show_label),
-    size = 3,
-    family = "Bahnschrift",
-    fontface = "bold",
-    hjust = 0,
-    vjust = 0,
-    label.size = NA,
-    label.padding = unit(0.01, "lines"),
-    label.r = unit(0.5, "lines"),
-    check_overlap = TRUE
-  ) +
-  scale_x_continuous(breaks = seq(0, 40, 5)) +
-  scale_y_continuous(labels = label_dollar(scale = 1 / 1e6, suffix = "M")) +
-  scale_colour_fish(option = "Epibulus_insidiator",
-                    discrete = TRUE,
-                    direction = 1) +
-  expand_limits(x = 40) +
-  labs(
-    title = "Could Hamilton overtake The Lion King in...20 years?",
-    subtitle = paste0("Cumulative box office receipts (Jan. 2020 dollars) for top 10 grossing shows since 1985"),
-    caption = paste0("Source: Playbill\n",
-                     "Note: Partial data for Cats, which started in 1982 (this data begins in 1985)"),
-    x = "Year of run",
-    y = ""
-  ) +
-  theme(
-    legend.position = "none",
-    text = element_text(family = "Bahnschrift"),
-    panel.grid.minor = element_blank()
-  )
 ```
