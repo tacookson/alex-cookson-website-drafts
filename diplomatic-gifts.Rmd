@@ -1,0 +1,169 @@
+---
+title: "U.S. Government Gifts"
+author: "Alex Cookson"
+date: "2020-05-03"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r setup-and-import}
+library(tidyverse)
+library(tidytext)
+library(countrycode)
+library(fuzzyjoin)
+library(fishualize)
+
+theme_set(theme_light())
+
+gifts <- read_csv("https://raw.githubusercontent.com/tacookson/data/master/us-government-gifts/gifts.csv")
+
+source("https://raw.githubusercontent.com/tacookson/data/master/us-government-gifts/src/country-adjective-list.R")
+```
+
+```{r}
+gift_stop_words <- c("x", # Used for describing dimensions
+                     "est", # Common words about value and disposition
+                     "rec'd",
+                     "recd",
+                     "disposition",
+                     "administration",
+                     "services",
+                     "pending",
+                     "transfer",
+                     "archives",
+                     "protocol",
+                     "gsa",
+                     "de", # Stop word in romance languages like French
+                     "la",
+                     "los",
+                     "foreign",
+                     "director's") # References to "Displayed in Director's Office"
+
+month_stop_words <- str_to_lower(c(month.abb, month.name))
+
+custom_stop_words <- tibble(stop_word = c(country_stop_words, gift_stop_words, month_stop_words)) %>%
+  unnest_tokens(word, stop_word)
+
+gift_words <- gifts %>%
+  # Select unique gift descriptions to pare down travel "gifts" that often take up multiple lines
+  distinct(gift_description, .keep_all = TRUE) %>%
+  # Filter out travel
+  filter(!str_detect(str_to_lower(gift_description), "travel")) %>%
+  transmute(id,
+            donor_country,
+            gift_description = str_to_lower(gift_description)) %>%
+  unnest_tokens(word, gift_description) %>%
+  anti_join(stop_words, by = "word") %>%
+  anti_join(custom_stop_words, by = "word") %>%
+  filter(str_detect(word, "[a-z]"),
+         !is.na(donor_country))
+```
+
+```{r}
+interesting_countries <- gift_words %>%
+  distinct(id, donor_country) %>%
+  count(donor_country, sort = TRUE) %>%
+  top_n(16, wt = n) %>%
+  pull(donor_country)
+
+gift_words %>%
+  distinct(id, donor_country, word) %>%
+  count(word, donor_country) %>%
+  bind_tf_idf(word, donor_country, n) %>%
+  filter(n >= 3) %>%
+  arrange(desc(tf_idf)) %>%
+  filter(donor_country %in% c("Canada", "Mexico", "United Kingdom", "France", "Germany", "Saudi Arabia", "Australia")) %>%
+  group_by(donor_country) %>%
+  top_n(6) %>%
+  ungroup() %>%
+  mutate(word = reorder_within(word, by = tf_idf, within = donor_country, sep = ": ")) %>%
+  ggplot(aes(tf_idf, word, fill = donor_country)) +
+  geom_col() +
+  scale_y_reordered(sep = ": ") +
+  scale_fill_fish(option = "Epibulus_insidiator",
+                  discrete = TRUE) +
+  facet_wrap(~ donor_country, scales = "free_y") +
+  labs(title = "What words are associated with different countries' diplomatic gifts to the U.S.?") +
+  theme(legend.position = "none",
+        axis.text.y = element_text(size = 14),
+        strip.background = element_blank(),
+        strip.text = element_text(colour = "black", face = "bold"))
+```
+
+```{r top-country-words}
+gift_words %>%
+  distinct(id, donor_country, word) %>%
+  count(word, donor_country) %>%
+  bind_tf_idf(word, donor_country, n) %>%
+  filter(n >= 3) %>%
+  arrange(desc(tf_idf)) %>%
+  group_by(donor_country) %>%
+  top_n(1) %>%
+  ungroup() %>%
+  View()
+```
+
+```{r}
+gifts %>%
+  filter(donor_country == "United Kingdom",
+         str_detect(str_to_lower(gift_description), "highness")) %>%
+  View()
+```
+
+# Individual recipients
+
+```{r}
+gift_words_by_person <- gifts %>%
+  # Select unique gift descriptions to pare down travel "gifts" that often take up multiple lines
+  distinct(gift_description, .keep_all = TRUE) %>%
+  # Filter out travel
+  filter(!str_detect(str_to_lower(gift_description), "travel")) %>%
+  transmute(id,
+            recipient,
+            gift_description = str_to_lower(gift_description)) %>%
+  unnest_tokens(word, gift_description) %>%
+  anti_join(stop_words, by = "word") %>%
+  anti_join(custom_stop_words, by = "word") %>%
+  filter(str_detect(word, "[a-z]"),
+         !is.na(recipient))
+
+gift_words_by_person %>%
+  distinct(id, recipient, word) %>%
+  count(word, recipient) %>%
+  bind_tf_idf(word, recipient, n) %>%
+  filter(n >= 3) %>%
+  arrange(desc(tf_idf)) %>%
+  filter(str_detect(recipient, c("Obama"))) %>%
+  group_by(recipient) %>%
+  top_n(6) %>%
+  ungroup() %>%
+  mutate(word = reorder_within(word, by = tf_idf, within = recipient, sep = ": ")) %>%
+  ggplot(aes(tf_idf, word, fill = recipient)) +
+  geom_col() +
+  scale_y_reordered(sep = ": ") +
+  scale_fill_fish(option = "Epibulus_insidiator",
+                  discrete = TRUE) +
+  facet_wrap(~ recipient, scales = "free_y") +
+  labs(title = "What words are associated with different countries' diplomatic gifts to the U.S.?") +
+  theme(legend.position = "none",
+        axis.text.y = element_text(size = 14),
+        strip.background = element_blank(),
+        strip.text = element_text(colour = "black", face = "bold"))
+```
+
+
+
+
+### Appendix
+
+Questions:
+
+- What are the most and least expensive gifts?
+- Do some countries give more expensive gifts than others?
+- How many of these gifts are given specifically to the President? (And what is their value?)
+- What gifts has Canada given?
+- Do certain countries give certain types of gifts?
+
