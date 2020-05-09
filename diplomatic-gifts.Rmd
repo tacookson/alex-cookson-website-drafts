@@ -1,7 +1,8 @@
 ---
-title: "U.S. Government Gifts"
+title: "What do countries' diplomatic gifts tell us about them?"
+description: "Text analysis of diplomatic gifts to U.S. federal employees"
 author: "Alex Cookson"
-date: "2020-05-03"
+date: "2020-05-09"
 output: html_document
 ---
 
@@ -23,7 +24,7 @@ source("https://raw.githubusercontent.com/tacookson/data/master/us-government-gi
 ```
 
 
-```{r}
+```{r stop-words}
 gift_stop_words <- c("x", # Used for describing dimensions
                      "inches",
                      "est", # Common words about value and disposition
@@ -34,53 +35,65 @@ gift_stop_words <- c("x", # Used for describing dimensions
                      "services",
                      "pending",
                      "transfer",
+                     "transferred",
                      "archives",
                      "protocol",
                      "gsa",
                      "national",
+                     "foreign",
                      "records",
-                     "de", # Stop word in romance languages like French
+                     "de", # Stop word in romance languages like French/Spanish
                      "la",
-                     "los",
-                     "foreign")
+                     "los")
 
 month_stop_words <- str_to_lower(c(month.abb, month.name))
 
 custom_stop_words <- tibble(stop_word = c(country_stop_words, gift_stop_words, month_stop_words)) %>%
   unnest_tokens(word, stop_word)
+```
 
+```{r gift-tokens}
 gift_words <- gifts %>%
-  # Select unique gift descriptions to pare down travel "gifts" that often take up multiple lines
+  # Select unique gift descriptions to pare down gifts that often take up multiple lines
   distinct(gift_description, .keep_all = TRUE) %>%
-  # Filter out travel
-  filter(!str_detect(str_to_lower(gift_description), "travel")) %>%
   transmute(id,
             donor_country,
             gift_description = str_to_lower(gift_description)) %>%
+  # Filter out travel
+  filter(!str_detect(gift_description, "travel")) %>%
+  # Break gift_description into individual words
   unnest_tokens(word, gift_description) %>%
+  # Get rid of standard English stop words (or, the, an, etc.)
   anti_join(stop_words, by = "word") %>%
+  # Get rid of our custom stop words
   anti_join(custom_stop_words, by = "word") %>%
+  # Only keep words that have at least one letter
+  # Numbers only aren't likely meaningful in our context
   filter(str_detect(word, "[a-z]"),
          !is.na(donor_country))
 ```
 
-```{r}
-interesting_countries <- gift_words %>%
-  distinct(id, donor_country) %>%
-  count(donor_country, sort = TRUE) %>%
-  top_n(16, wt = n) %>%
-  pull(donor_country)
 
+```{r interesting-countries}
+g7_countries <- c("Italy", "Japan", "Germany", "Canada", "United Kingdom", "France")
+
+g20_countries <- c("Argentina", "Australia", "Brazil", "Canada", "China", "France", "Germany",
+                   "India", "Indonesia", "Italy", "Japan", "Mexico", "Russia", "Saudi Arabia",
+                   "South Africa", "South Korea", "Turkey", "United Kingdom")
+```
+
+```{r tf-idf}
 gift_words_tfidf <- gift_words %>%
   distinct(id, donor_country, word) %>%
   count(word, donor_country) %>%
   bind_tf_idf(word, donor_country, n) %>%
   # Only include words that appears in at least 3 gift descriptions
   filter(n >= 3)
+```
 
-# Top TF-IDF words facetted by country
+```{r g7-countries-tf-idf}
 gift_words_tfidf %>%
-  filter(donor_country %in% c("Canada", "Mexico", "United Kingdom", "France", "Germany", "Saudi Arabia", "Australia", "Russia")) %>%
+  filter(donor_country %in% g7_countries) %>%
   group_by(donor_country) %>%
   top_n(6) %>%
   ungroup() %>%
@@ -88,91 +101,88 @@ gift_words_tfidf %>%
   ggplot(aes(tf_idf, word, fill = donor_country)) +
   geom_col() +
   scale_y_reordered(sep = ": ") +
-  scale_fill_fish(option = "Epibulus_insidiator",
-                  discrete = TRUE) +
+  scale_fill_fish(option = "Epibulus_insidiator", discrete = TRUE) +
   facet_wrap(~ donor_country, scales = "free_y") +
   labs(title = "What words are associated with different countries' diplomatic gifts to the U.S.?") +
   theme(legend.position = "none",
         axis.text.y = element_text(size = 14),
         strip.background = element_blank(),
         strip.text = element_text(colour = "black", face = "bold"))
+```
 
-# Top TF-IDF words overall
+Discuss shortcoming of TF-IDF approach:
+
+- You might get words that aren't meaningful to answering your question (e.g., Moscow, Kremlin for Russia)
+- Tokenizing by individual words ignores significance of compound nouns (e.g., mother-of-pearl for South Korea, leather briefcase for Argentina)
+- Words used in one or two "documents" can have large TF-IDF, which can be misleading. We filtered for words that appear in at least three gift descriptions to address this, but adding that filter has its own issues because we set an arbitrary threshold and might be losing out on interesting information in words that do appear in only 1 or 2 descriptions.
+
+```{r g20-countries-tf-idf}
 gift_words_tfidf %>%
-  top_n(16, wt = tf_idf) %>%
-  mutate(word = fct_reorder(str_to_title(word), tf_idf)) %>%
+  filter(donor_country %in% setdiff(g20_countries, g7_countries)) %>%
+  group_by(donor_country) %>%
+  top_n(6) %>%
+  ungroup() %>%
+  mutate(word = reorder_within(word, by = tf_idf, within = donor_country, sep = ": ")) %>%
   ggplot(aes(tf_idf, word, fill = donor_country)) +
   geom_col() +
-  geom_text(aes(label = donor_country), col = "white", hjust = 1, nudge_x = -0.005, fontface = "bold") +
-  scale_fill_fish(option = "Epibulus_insidiator",
-                  discrete = TRUE) +
-  scale_colour_fish(option = "Epibulus_insidiator",
-                  discrete = TRUE) +
-  expand_limits(x = c(0, 0),
-                y = c(0, 0)) +
-  labs(title = "What are the most \"distinctive\" words associated with diplomatic gifts?",
-       x = "TF-IDF",
-       y = "") +
+  scale_y_reordered(sep = ": ") +
+  scale_fill_fish(option = "Epibulus_insidiator", discrete = TRUE) +
+  facet_wrap(~ donor_country, scales = "free_y") +
+  labs(title = "What words are associated with different countries' diplomatic gifts to the U.S.?") +
   theme(legend.position = "none",
+        panel.grid.minor = element_blank(),
+        panel.grid.major.y = element_blank(),
         axis.text.y = element_text(size = 14),
         strip.background = element_blank(),
         strip.text = element_text(colour = "black", face = "bold"))
 ```
 
-```{r top-country-words}
-gift_words %>%
-  distinct(id, donor_country, word) %>%
-  count(word, donor_country) %>%
-  bind_tf_idf(word, donor_country, n) %>%
-  filter(n >= 3) %>%
-  arrange(desc(tf_idf)) %>%
-  group_by(donor_country) %>%
-  top_n(1) %>%
-  ungroup() %>%
-  View()
-```
-
-```{r}
-gifts %>%
-  filter(donor_country == "United Kingdom",
-         str_detect(str_to_lower(gift_description), "highness")) %>%
-  View()
-```
-
-
-
-```{r gift-value-by-country}
-top_20_countries <- gifts %>%
-  group_by(donor_country) %>%
-  summarise(value_usd = sum(value_usd, na.rm = TRUE)) %>%
-  filter(!is.na(donor_country)) %>%
-  top_n(20, wt = value_usd) %>%
-  pull(donor_country)
-
-gifts %>%
-  group_by(donor_country) %>%
-  summarise(value_usd = sum(value_usd, na.rm = TRUE)) %>%
-  filter(!is.na(donor_country)) %>%
-  top_n(20, wt = value_usd) %>%
-  mutate(donor_country = fct_reorder(donor_country, value_usd)) %>%
-  ggplot(aes(value_usd, donor_country, fill = donor_country)) +
+```{r top-tf-idf-overall}
+gift_words_tfidf %>%
+  top_n(16, wt = tf_idf) %>%
+  mutate(word = fct_reorder(str_to_title(word), tf_idf)) %>%
+  ggplot(aes(tf_idf, word, fill = donor_country)) +
   geom_col() +
-  scale_x_continuous(labels = label_dollar()) +
-  scale_fill_fish(option = "Epibulus_insidiator",
-                  discrete = TRUE) +
-  theme(legend.position = "none")
-
-gifts %>%
-  filter(donor_country %in% top_20_countries,
-         !is.na(value_usd)) %>%
-  mutate(donor_country = fct_reorder(donor_country, value_usd, median)) %>%
-  ggplot(aes(value_usd, donor_country, fill = donor_country)) +
-  geom_boxplot() +
-  scale_x_log10(labels = label_dollar()) +
-  scale_fill_fish(option = "Epibulus_insidiator",
-                  discrete = TRUE) +
-  theme(legend.position = "none")
+  geom_text(aes(label = donor_country),
+            col = "white",
+            fontface = "bold",
+            hjust = 1,
+            nudge_x = -0.005) +
+  scale_fill_fish("Epibulus_insidiator", discrete = TRUE) +
+  scale_colour_fish("Epibulus_insidiator", discrete = TRUE) +
+  expand_limits(x = c(0, 0.45)) +
+  labs(title = "What are the most \"distinctive\" words associated with diplomatic gifts?",
+       x = "TF-IDF",
+       y = NULL) +
+  theme_minimal() +
+  theme(legend.position = "none",
+        panel.grid.minor = element_blank(),
+        panel.grid.major.y = element_blank(),
+        axis.text.y = element_text(size = 14),
+        strip.background = element_blank(),
+        strip.text = element_text(colour = "black", face = "bold"))
 ```
+
+Annotation notes for above:
+
+- Iceland likes giving the book "The Complete Sagas of Icelanders" (id 762, 7026, 7790)
+- Luxembourg likes giving fox sculptures (id 2123, 2239, 2678)
+- Ghana likes giving Kente cloth gifts, which is a traditional cloth of Ghana (id 880, 2527, 8361)
+- Moldova likes giving cognax (id 5932, 8293)
+- Cuba likes giving cigars (id 568, 7152, 6959)
+- Sweden likes giving Orrefors crystal (id 654, 1742, 6195)
+
+
+```{r gift-description-lookup}
+gifts %>%
+  filter(donor_country == "Argentina",
+         str_detect(str_to_lower(gift_description), "briefcase")) %>%
+  View()
+```
+
+
+
+
 
 
 
@@ -251,4 +261,50 @@ gift_words_by_person %>%
                   discrete = TRUE,
                   direction = -1) +
   theme(legend.position = "none")
+```
+
+```{r gift-value-by-country, eval = FALSE}
+top_20_countries <- gifts %>%
+  group_by(donor_country) %>%
+  summarise(value_usd = sum(value_usd, na.rm = TRUE)) %>%
+  filter(!is.na(donor_country)) %>%
+  top_n(20, wt = value_usd) %>%
+  pull(donor_country)
+
+gifts %>%
+  group_by(donor_country) %>%
+  summarise(value_usd = sum(value_usd, na.rm = TRUE)) %>%
+  filter(!is.na(donor_country)) %>%
+  top_n(20, wt = value_usd) %>%
+  mutate(donor_country = fct_reorder(donor_country, value_usd)) %>%
+  ggplot(aes(value_usd, donor_country, fill = donor_country)) +
+  geom_col() +
+  scale_x_continuous(labels = label_dollar()) +
+  scale_fill_fish(option = "Epibulus_insidiator",
+                  discrete = TRUE) +
+  theme(legend.position = "none")
+
+gifts %>%
+  filter(donor_country %in% top_20_countries,
+         !is.na(value_usd)) %>%
+  mutate(donor_country = fct_reorder(donor_country, value_usd, median)) %>%
+  ggplot(aes(value_usd, donor_country, fill = donor_country)) +
+  geom_boxplot() +
+  scale_x_log10(labels = label_dollar()) +
+  scale_fill_fish(option = "Epibulus_insidiator",
+                  discrete = TRUE) +
+  theme(legend.position = "none")
+```
+
+```{r top-country-words, eval = FALSE}
+gift_words %>%
+  distinct(id, donor_country, word) %>%
+  count(word, donor_country) %>%
+  bind_tf_idf(word, donor_country, n) %>%
+  filter(n >= 3) %>%
+  arrange(desc(tf_idf)) %>%
+  group_by(donor_country) %>%
+  top_n(1) %>%
+  ungroup() %>%
+  View()
 ```
