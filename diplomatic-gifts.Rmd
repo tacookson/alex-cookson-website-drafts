@@ -6,15 +6,19 @@ date: "2020-05-09"
 output: html_document
 ---
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
-```
+Introduction text
+
+
+## Setup
+
+Description of setup
 
 ```{r setup-and-import}
 library(tidyverse)
 library(tidytext)
-library(scales)
 library(fishualize)
+library(ggtext)
+library(extrafont)
 
 theme_set(theme_light())
 
@@ -22,6 +26,31 @@ gifts <- read_csv("https://raw.githubusercontent.com/tacookson/data/master/us-go
 
 source("https://raw.githubusercontent.com/tacookson/data/master/us-government-gifts/src/country-adjective-list.R")
 ```
+
+
+## Data inspection
+
+Data inspection intro and code goes here
+
+
+## Text analysis with TF-IDF
+
+Explanation of steps in text analysis and what TF-IDF is
+
+```{r gift-tokens-with-stop-words}
+gift_words_raw <- gifts %>%
+  # Select unique gift descriptions to pare down gifts that often take up multiple lines
+  distinct(gift_description, .keep_all = TRUE) %>%
+  transmute(id,
+            donor_country,
+            gift_description = str_to_lower(gift_description)) %>%
+  # Filter out travel
+  filter(!str_detect(gift_description, "travel")) %>%
+  # Break gift_description into individual words
+  unnest_tokens(word, gift_description)
+```
+
+Review tokenized gift words and explain why we need stop words
 
 
 ```{r stop-words}
@@ -52,17 +81,8 @@ custom_stop_words <- tibble(stop_word = c(country_stop_words, gift_stop_words, m
   unnest_tokens(word, stop_word)
 ```
 
-```{r gift-tokens}
-gift_words <- gifts %>%
-  # Select unique gift descriptions to pare down gifts that often take up multiple lines
-  distinct(gift_description, .keep_all = TRUE) %>%
-  transmute(id,
-            donor_country,
-            gift_description = str_to_lower(gift_description)) %>%
-  # Filter out travel
-  filter(!str_detect(gift_description, "travel")) %>%
-  # Break gift_description into individual words
-  unnest_tokens(word, gift_description) %>%
+```{r gift-words-cleaned}
+gift_words <- gift_words_raw %>%
   # Get rid of standard English stop words (or, the, an, etc.)
   anti_join(stop_words, by = "word") %>%
   # Get rid of our custom stop words
@@ -74,13 +94,8 @@ gift_words <- gifts %>%
 ```
 
 
-```{r interesting-countries}
-g7_countries <- c("Italy", "Japan", "Germany", "Canada", "United Kingdom", "France")
 
-g20_countries <- c("Argentina", "Australia", "Brazil", "Canada", "China", "France", "Germany",
-                   "India", "Indonesia", "Italy", "Japan", "Mexico", "Russia", "Saudi Arabia",
-                   "South Africa", "South Korea", "Turkey", "United Kingdom")
-```
+Decision to require that gifts be given at least 3 times
 
 ```{r tf-idf}
 gift_words_tfidf <- gift_words %>%
@@ -89,6 +104,76 @@ gift_words_tfidf <- gift_words %>%
   bind_tf_idf(word, donor_country, n) %>%
   # Only include words that appears in at least 3 gift descriptions
   filter(n >= 3)
+```
+
+
+## Overall top words
+
+Explanation of `ggtext`? Or just use it?
+
+```{r top-tf-idf-overall}
+# Set defaults for annotations so we don't need to copy-paste them
+update_geom_defaults(GeomRichtext, list(hjust = 0, colour = "grey20",
+                                        family = "Bahnschrift", size = 4))
+
+gift_words_tfidf %>%
+  top_n(16, wt = tf_idf) %>%
+  mutate(word = fct_reorder(str_to_title(word), tf_idf)) %>%
+  ggplot(aes(tf_idf, word, fill = donor_country)) +
+  geom_col() +
+  geom_text(aes(label = donor_country),
+            col = "white",
+            fontface = "bold",
+            hjust = 1,
+            nudge_x = -0.005) +
+  # Iceland
+  geom_richtext(x = 0.307, y = 13.5, fill = "white",
+                label = "Iceland often gifts the book set<br>\"The <span style = 'color:#669638'>**Complete Sagas**</span> of <span style = 'color:#669638'>**Icelanders**</span>\"") +
+  # Marshall Islands
+  geom_richtext(x = 0.248, y = 10.5, fill = "white",
+                label = "Marshall Islands gifted many <span style = 'color:#BCA51F'>**elephant tusks**</span><br>in 2001, which purposefully <span style = 'color:#BCA51F'>**destroyed**</span>") +
+  # Sweden
+  geom_richtext(x = 0.202, y = 9, fill = "white",
+                label = "Sweden gifts <span style = 'color:#F0A630'>**Orrefors**</span> crystal") +
+  # Ghana
+  geom_richtext(x = 0.161, y = 7, hjust = 0, fill = "white",
+                label = "Ghana gifts <span style = 'color:#92B7B7'>**Kente**</span>, a traditional Ghanian fabric") +
+  # Cuba
+  geom_richtext(x = 0.138, y = 1, hjust = 0, fill = "white",
+                label = "Cuba, naturally, gifts <span style = 'color:#99AFD6'>**cigars**</span>") +
+  scale_fill_fish("Epibulus_insidiator", discrete = TRUE) +
+  scale_colour_fish("Epibulus_insidiator", discrete = TRUE) +
+  expand_limits(x = c(0, 0.5)) +
+  labs(title = "What are the most \"distinctive\" words associated with diplomatic gifts?",
+       x = "TF-IDF",
+       y = NULL) +
+  theme_minimal() +
+  theme(legend.position = "none",
+        panel.grid.minor = element_blank(),
+        panel.grid.major.y = element_blank(),
+        axis.text.y = element_text(size = 14),
+        strip.background = element_blank(),
+        strip.text = element_text(colour = "black", face = "bold"))
+```
+
+Annotation notes for above:
+
+- Iceland likes giving the book set "The Complete Sagas of Icelanders" (id 762, 7026, 7790)
+- Luxembourg likes giving fox sculptures (id 2123, 2239, 2678)
+- Ghana likes giving Kente cloth gifts, which is a traditional cloth of Ghana (id 880, 2527, 8361)
+- Moldova likes giving cognac (id 5932, 8293)
+- Cuba likes giving cigars (id 568, 7152, 6959)
+- Sweden likes giving Orrefors crystal (id 654, 1742, 6195)
+
+
+## Specific countries
+
+```{r interesting-countries}
+g7_countries <- c("Italy", "Japan", "Germany", "Canada", "United Kingdom", "France")
+
+g20_countries <- c("Argentina", "Australia", "Brazil", "Canada", "China", "France", "Germany",
+                   "India", "Indonesia", "Italy", "Japan", "Mexico", "Russia", "Saudi Arabia",
+                   "South Africa", "South Korea", "Turkey", "United Kingdom")
 ```
 
 ```{r g7-countries-tf-idf}
@@ -103,18 +188,12 @@ gift_words_tfidf %>%
   scale_y_reordered(sep = ": ") +
   scale_fill_fish(option = "Epibulus_insidiator", discrete = TRUE) +
   facet_wrap(~ donor_country, scales = "free_y") +
-  labs(title = "What words are associated with different countries' diplomatic gifts to the U.S.?") +
+  labs(title = "What words are associated with countries' gifts to the U.S.?") +
   theme(legend.position = "none",
         axis.text.y = element_text(size = 14),
         strip.background = element_blank(),
         strip.text = element_text(colour = "black", face = "bold"))
 ```
-
-Discuss shortcoming of TF-IDF approach:
-
-- You might get words that aren't meaningful to answering your question (e.g., Moscow, Kremlin for Russia)
-- Tokenizing by individual words ignores significance of compound nouns (e.g., mother-of-pearl for South Korea, leather briefcase for Argentina)
-- Words used in one or two "documents" can have large TF-IDF, which can be misleading. We filtered for words that appear in at least three gift descriptions to address this, but adding that filter has its own issues because we set an arbitrary threshold and might be losing out on interesting information in words that do appear in only 1 or 2 descriptions.
 
 ```{r g20-countries-tf-idf}
 gift_words_tfidf %>%
@@ -137,56 +216,30 @@ gift_words_tfidf %>%
         strip.text = element_text(colour = "black", face = "bold"))
 ```
 
-```{r top-tf-idf-overall}
-gift_words_tfidf %>%
-  top_n(16, wt = tf_idf) %>%
-  mutate(word = fct_reorder(str_to_title(word), tf_idf)) %>%
-  ggplot(aes(tf_idf, word, fill = donor_country)) +
-  geom_col() +
-  geom_text(aes(label = donor_country),
-            col = "white",
-            fontface = "bold",
-            hjust = 1,
-            nudge_x = -0.005) +
-  scale_fill_fish("Epibulus_insidiator", discrete = TRUE) +
-  scale_colour_fish("Epibulus_insidiator", discrete = TRUE) +
-  expand_limits(x = c(0, 0.45)) +
-  labs(title = "What are the most \"distinctive\" words associated with diplomatic gifts?",
-       x = "TF-IDF",
-       y = NULL) +
-  theme_minimal() +
-  theme(legend.position = "none",
-        panel.grid.minor = element_blank(),
-        panel.grid.major.y = element_blank(),
-        axis.text.y = element_text(size = 14),
-        strip.background = element_blank(),
-        strip.text = element_text(colour = "black", face = "bold"))
-```
 
-Annotation notes for above:
+## Drawbacks of TF-IDF
 
-- Iceland likes giving the book "The Complete Sagas of Icelanders" (id 762, 7026, 7790)
-- Luxembourg likes giving fox sculptures (id 2123, 2239, 2678)
-- Ghana likes giving Kente cloth gifts, which is a traditional cloth of Ghana (id 880, 2527, 8361)
-- Moldova likes giving cognax (id 5932, 8293)
-- Cuba likes giving cigars (id 568, 7152, 6959)
-- Sweden likes giving Orrefors crystal (id 654, 1742, 6195)
+Discuss shortcoming of TF-IDF approach:
+
+- You might get words that aren't meaningful to answering your question (e.g., Moscow, Kremlin for Russia)
+- Tokenizing by individual words ignores significance of compound nouns (e.g., mother-of-pearl for South Korea, leather briefcase for Argentina)
+- Words used in one or two "documents" can have large TF-IDF, which can be misleading. We filtered for words that appear in at least three gift descriptions to address this, but adding that filter has its own issues because we set an arbitrary threshold and might be losing out on interesting information in words that do appear in only 1 or 2 descriptions.
+
+
+## Conclusion
+
+Conclusion goes here!
+
+
+
 
 
 ```{r gift-description-lookup}
 gifts %>%
-  filter(donor_country == "Argentina",
-         str_detect(str_to_lower(gift_description), "briefcase")) %>%
+  filter(donor_country == "Marshall Islands",
+         str_detect(str_to_lower(gift_description), "destroyed")) %>%
   View()
 ```
-
-
-
-
-
-
-
-
 
 
 ### Appendix
