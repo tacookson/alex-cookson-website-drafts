@@ -4,38 +4,74 @@ description: "Text analysis of diplomatic gifts to U.S. federal employees"
 author: "Alex Cookson"
 date: "2020-05-09"
 output: html_document
----
+---  
+\  
 
-Introduction text
+Introduction text.
+
+Question we are asking: Do countries tend to give certain types of gifts? For example, would a typical gift from Canada be something related to hockey, maple syrup, or polar bears?
 
 
 ## Setup
 
-Description of setup
+First, we'll load the `tidyverse` and some other useful packages:
 
-```{r setup-and-import}
+- `tidytext` for text analysis (Julia Silge and David Robinson wrote an [excellent book](https://www.tidytextmining.com/) on text analysis using this package)
+- `fishualize` for beautiful ggplot2 colour palettes
+- `extrafont` for additional fonts
+- `ggtext` for rich-text customization of text (e.g., changing colours of individual words)  
+\  
+
+Then we'll import our data, which comes originally from the [U.S. Office of the Federal Register](https://www.archives.gov/federal-register), which provides access to federal government documents, including the reports of diplomatic gifts that we're looking for. The original documents needed extensive parsing and cleaning to get them into a [tidy format](https://cran.r-project.org/web/packages/tidyr/vignettes/tidy-data.html). I won't go into detail on that process here, but if you're interested in the cleaning process or want to learn more about the data itself, look at the [README](https://github.com/tacookson/data/tree/master/us-government-gifts) on GitHub.
+
+```{r setup-and-import, warning = FALSE, message = FALSE}
 library(tidyverse)
 library(tidytext)
 library(fishualize)
-library(ggtext)
 library(extrafont)
+library(ggtext)
 
 theme_set(theme_light())
 
 gifts <- read_csv("https://raw.githubusercontent.com/tacookson/data/master/us-government-gifts/gifts.csv")
-
-source("https://raw.githubusercontent.com/tacookson/data/master/us-government-gifts/src/country-adjective-list.R")
-```
+```  
+\  
 
 
 ## Data inspection
 
-Data inspection intro and code goes here
+Let's see what the `gifts` dataset has for us!
+
+```{r inspect-data}
+# glimpse bottom of data because top doesn't have good examples
+glimpse(gifts %>% arrange(-id)) %>% View()
+```
+
+There are four types of data:
+
+1. Who **received** the gift, including name/title and what agency they are associated with
+2. Who **gave** the gift, including name/title and the country they represent
+3. Details on the **gift itself**, mostly in the written `gift_description`, but also in the `value_usd` field, which gives the estimated value
+4. Details about the `occasion of gifting`, like when it was received and the reason the gift was accepted  
+\  
+
+We'll focus on the `gift_description` field, which has *wonderful* free-form text descriptions. I spent *hours* reading some of these descriptions. Here is a short example of a gift given in 2003 to First Lady Laura Bush by French President Jacques Chirac.
+
+```{r example-gift-description}
+gifts %>%
+  filter(id == 1605) %>%
+  pull(gift_description)
+```
+
+(We'll soon see from our analysis that *Hermès* items are a quintessentially French gift.)  
+\  
 
 
 ## Text analysis with TF-IDF
 
 Explanation of steps in text analysis and what TF-IDF is
+
+### Tokenizing and eliminating stop words
 
 ```{r gift-tokens-with-stop-words}
 gift_words_raw <- gifts %>%
@@ -54,6 +90,10 @@ Review tokenized gift words and explain why we need stop words
 
 
 ```{r stop-words}
+# Country stop words
+source("https://raw.githubusercontent.com/tacookson/data/master/us-government-gifts/src/country-adjective-list.R")
+
+# Stop words specific to this dataset
 gift_stop_words <- c("x", # Used for describing dimensions
                      "inches",
                      "est", # Common words about value and disposition
@@ -75,9 +115,13 @@ gift_stop_words <- c("x", # Used for describing dimensions
                      "la",
                      "los")
 
+# Month name stop words
 month_stop_words <- str_to_lower(c(month.abb, month.name))
 
-custom_stop_words <- tibble(stop_word = c(country_stop_words, gift_stop_words, month_stop_words)) %>%
+# Put all the stop words together
+custom_stop_words <- tibble(stop_word = c(country_stop_words,
+                                          gift_stop_words,
+                                          month_stop_words)) %>%
   unnest_tokens(word, stop_word)
 ```
 
@@ -94,6 +138,7 @@ gift_words <- gift_words_raw %>%
 ```
 
 
+### Calculating TF-IDF
 
 Decision to require that gifts be given at least 3 times
 
@@ -106,14 +151,22 @@ gift_words_tfidf <- gift_words %>%
   filter(n >= 3)
 ```
 
+```{r}
+gift_words_tfidf %>%
+  filter(donor_country == "Kenya") %>%
+  arrange(desc(tf_idf))
+```
 
-## Overall top words
+
+
+### Overall top words
 
 Explanation of `ggtext`? Or just use it?
 
 ```{r top-tf-idf-overall}
 # Set defaults for annotations so we don't need to copy-paste them
-update_geom_defaults(GeomRichtext, list(hjust = 0, colour = "grey20",
+# fill = "white" doesn't work for some reason
+update_geom_defaults(GeomRichtext, list(hjust = 0, colour = "grey20", label.colour = NA,
                                         family = "Bahnschrift", size = 4))
 
 gift_words_tfidf %>%
@@ -131,7 +184,7 @@ gift_words_tfidf %>%
                 label = "Iceland often gifts the book set<br>\"The <span style = 'color:#669638'>**Complete Sagas**</span> of <span style = 'color:#669638'>**Icelanders**</span>\"") +
   # Marshall Islands
   geom_richtext(x = 0.248, y = 10.5, fill = "white",
-                label = "Marshall Islands gifted many <span style = 'color:#BCA51F'>**elephant tusks**</span><br>in 2001, which purposefully <span style = 'color:#BCA51F'>**destroyed**</span>") +
+                label = "Marshall Islands gifted many <span style = 'color:#BCA51F'>**elephant tusks**</span><br>in 2001, which were purposefully <span style = 'color:#BCA51F'>**destroyed**</span>") +
   # Sweden
   geom_richtext(x = 0.202, y = 9, fill = "white",
                 label = "Sweden gifts <span style = 'color:#F0A630'>**Orrefors**</span> crystal") +
@@ -149,6 +202,7 @@ gift_words_tfidf %>%
        y = NULL) +
   theme_minimal() +
   theme(legend.position = "none",
+        text = element_text(family = "Bahnschrift"),
         panel.grid.minor = element_blank(),
         panel.grid.major.y = element_blank(),
         axis.text.y = element_text(size = 14),
@@ -166,7 +220,7 @@ Annotation notes for above:
 - Sweden likes giving Orrefors crystal (id 654, 1742, 6195)
 
 
-## Specific countries
+### Specific countries
 
 ```{r interesting-countries}
 g7_countries <- c("Italy", "Japan", "Germany", "Canada", "United Kingdom", "France")
@@ -190,6 +244,8 @@ gift_words_tfidf %>%
   facet_wrap(~ donor_country, scales = "free_y") +
   labs(title = "What words are associated with countries' gifts to the U.S.?") +
   theme(legend.position = "none",
+        panel.grid.minor = element_blank(),
+        panel.grid.major.y = element_blank(),
         axis.text.y = element_text(size = 14),
         strip.background = element_blank(),
         strip.text = element_text(colour = "black", face = "bold"))
@@ -217,7 +273,7 @@ gift_words_tfidf %>%
 ```
 
 
-## Drawbacks of TF-IDF
+### Drawbacks of TF-IDF
 
 Discuss shortcoming of TF-IDF approach:
 
@@ -230,16 +286,6 @@ Discuss shortcoming of TF-IDF approach:
 
 Conclusion goes here!
 
-
-
-
-
-```{r gift-description-lookup}
-gifts %>%
-  filter(donor_country == "Marshall Islands",
-         str_detect(str_to_lower(gift_description), "destroyed")) %>%
-  View()
-```
 
 
 ### Appendix
@@ -256,108 +302,13 @@ Questions:
 Additional areas to explore:
 
 - Looking at named entities instead of single words (would probably capture things like "men's watch" instead of separating the words)
+- Stemming or lemmatization of words (e.g., Kenya had different words for "elephant" and "elephants". Those aren't really different concepts, so it would make sense to combine them into one word)
+- Are there are regional patterns to gifts? (e.g., are Middle Eastern countries more likely to gift rugs than other countries?)
 
 
-
-### Unused code
-
-```{r recipients, eval = FALSE}
-gift_words_by_person <- gifts %>%
-  # Select unique gift descriptions to pare down travel "gifts" that often take up multiple lines
-  distinct(gift_description, .keep_all = TRUE) %>%
-  # Filter out travel
-  filter(!str_detect(str_to_lower(gift_description), "travel")) %>%
-  transmute(id,
-            recipient,
-            gift_description = str_to_lower(gift_description)) %>%
-  unnest_tokens(word, gift_description) %>%
-  anti_join(stop_words, by = "word") %>%
-  anti_join(custom_stop_words, by = "word") %>%
-  filter(str_detect(word, "[a-z]"),
-         !is.na(recipient))
-
-gift_words_by_person %>%
-  distinct(id, recipient, word) %>%
-  count(word, recipient) %>%
-  bind_tf_idf(word, recipient, n) %>%
-  filter(n >= 3) %>%
-  arrange(desc(tf_idf)) %>%
-  filter(str_detect(recipient, c("President")),
-         !str_detect(recipient, "Vice"),
-         !str_detect(recipient, "Assistant")) %>%
-  group_by(recipient) %>%
-  top_n(6) %>%
-  ungroup() %>%
-  mutate(word = reorder_within(word, by = tf_idf, within = recipient, sep = ": ")) %>%
-  ggplot(aes(tf_idf, word, fill = recipient)) +
-  geom_col() +
-  scale_y_reordered(sep = ": ") +
-  scale_fill_fish(option = "Epibulus_insidiator",
-                  discrete = TRUE) +
-  facet_wrap(~ recipient, scales = "free_y") +
-  labs(title = "What words are associated with different countries' diplomatic gifts to the U.S.?") +
-  theme(legend.position = "none",
-        axis.text.y = element_text(size = 14),
-        strip.background = element_blank(),
-        strip.text = element_text(colour = "black", face = "bold"))
-```
-
-```{r president-gift-words, eval = FALSE}
-gift_words_by_person %>%
-  filter(str_detect(recipient, "^President") | str_detect(recipient, "President of the United States")) %>%
-  count(word, sort = TRUE) %>%
-  top_n(20, wt = n) %>%
-  mutate(word = fct_reorder(word, n)) %>%
-  ggplot(aes(n, word, fill = word)) +
-  geom_col() +
-  scale_fill_fish(option = "Epibulus_insidiator",
-                  discrete = TRUE,
-                  direction = -1) +
-  theme(legend.position = "none")
-```
-
-```{r gift-value-by-country, eval = FALSE}
-top_20_countries <- gifts %>%
-  group_by(donor_country) %>%
-  summarise(value_usd = sum(value_usd, na.rm = TRUE)) %>%
-  filter(!is.na(donor_country)) %>%
-  top_n(20, wt = value_usd) %>%
-  pull(donor_country)
-
+```{r gift-description-lookup}
 gifts %>%
-  group_by(donor_country) %>%
-  summarise(value_usd = sum(value_usd, na.rm = TRUE)) %>%
-  filter(!is.na(donor_country)) %>%
-  top_n(20, wt = value_usd) %>%
-  mutate(donor_country = fct_reorder(donor_country, value_usd)) %>%
-  ggplot(aes(value_usd, donor_country, fill = donor_country)) +
-  geom_col() +
-  scale_x_continuous(labels = label_dollar()) +
-  scale_fill_fish(option = "Epibulus_insidiator",
-                  discrete = TRUE) +
-  theme(legend.position = "none")
-
-gifts %>%
-  filter(donor_country %in% top_20_countries,
-         !is.na(value_usd)) %>%
-  mutate(donor_country = fct_reorder(donor_country, value_usd, median)) %>%
-  ggplot(aes(value_usd, donor_country, fill = donor_country)) +
-  geom_boxplot() +
-  scale_x_log10(labels = label_dollar()) +
-  scale_fill_fish(option = "Epibulus_insidiator",
-                  discrete = TRUE) +
-  theme(legend.position = "none")
-```
-
-```{r top-country-words, eval = FALSE}
-gift_words %>%
-  distinct(id, donor_country, word) %>%
-  count(word, donor_country) %>%
-  bind_tf_idf(word, donor_country, n) %>%
-  filter(n >= 3) %>%
-  arrange(desc(tf_idf)) %>%
-  group_by(donor_country) %>%
-  top_n(1) %>%
-  ungroup() %>%
+  filter(donor_country == "Marshall Islands",
+         str_detect(str_to_lower(gift_description), "destroyed")) %>%
   View()
 ```
