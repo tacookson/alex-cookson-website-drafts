@@ -2,27 +2,32 @@
 title: "What do countries' diplomatic gifts tell us about them?"
 description: "Text analysis of diplomatic gifts to U.S. federal employees"
 author: "Alex Cookson"
-date: "2020-05-09"
+date: "2020-05-19"
 output: html_document
 ---  
 \  
 
-Introduction text.
+Have you ever brought a bottle of wine, flowers, or [chocolate babka](https://www.youtube.com/watch?v=i78azsi7M94) to a dinner party as a host/hostess gift? Or brought home a souvenir for your parents, partner, or kids after you've been travelling -- like chocolate from Switzerland or, uh... [Brazil nuts](https://www.youtube.com/watch?v=tKXEydXbuOU) from Brazil? Countries do the same thing, kind of.
 
-Question we are asking: Do countries tend to give certain types of gifts? For example, would a typical gift from Canada be something related to hockey, maple syrup, or polar bears?
+[Diplomatic gifts](https://diplomacy.state.gov/diplomacy/why-do-diplomats-give-gifts/) are often exchanged when dignitaries travel abroad or receie visitors. They can be lavish, like a \$780,000 emerald and diamond jewellery set, given by King Abdullah of Saudi Arabia. They can be modest, like a \$50 bottle of wine, given by President Stjepan Mesić of Croatia. Or they can be essentially worthless, but symbolic, like a live shamrock, given by Prime Minister Bertie Ahern of Ireland. (Though in the shamrock's case, the State Department *did* value it at \$5.)
+
+**Do countries tend to give certain types of gifts?** A shamrock is meaningful coming from an Irish Prime Minister, but it would feel less appropriate if it came from, say, the Prime Minister of Japan.
+
+We're going to perform a **text analysis** of diplomatic gifts to U.S. federal employees, which includes folks like the President, Vice President, and Secretary of State. By law, these gifts must be described, valued, and recorded. All this information is published publicly, which is what we'll use as data to answer our question.  
+\  
 
 
 ## Setup
 
 First, we'll load the `tidyverse` and some other useful packages:
 
-- `tidytext` for text analysis (Julia Silge and David Robinson wrote an [excellent book](https://www.tidytextmining.com/) on text analysis using this package)
+- `tidytext` for text analysis
 - `fishualize` for beautiful ggplot2 colour palettes
 - `extrafont` for additional fonts
-- `ggtext` for rich-text customization of text (e.g., changing colours of individual words)  
+- `ggtext` for rich-text customization of text (e.g., changing colours of individual words in a plot title)  
 \  
 
-Then we'll import our data, which comes originally from the [U.S. Office of the Federal Register](https://www.archives.gov/federal-register), which provides access to federal government documents, including the reports of diplomatic gifts that we're looking for. The original documents needed extensive parsing and cleaning to get them into a [tidy format](https://cran.r-project.org/web/packages/tidyr/vignettes/tidy-data.html). I won't go into detail on that process here, but if you're interested in the cleaning process or want to learn more about the data itself, look at the [README](https://github.com/tacookson/data/tree/master/us-government-gifts) on GitHub.
+Then we'll import our data, originally from the [U.S. Office of the Federal Register](https://www.archives.gov/federal-register), which provides access to federal government documents, including the reports of diplomatic gifts that we're looking for. The original documents needed extensive cleaning to get into a [tidy format](https://cran.r-project.org/web/packages/tidyr/vignettes/tidy-data.html). I won't go into detail on that process here, but if you're interested, look at the [README](https://github.com/tacookson/data/tree/master/us-government-gifts) on GitHub.
 
 ```{r setup-and-import, warning = FALSE, message = FALSE}
 library(tidyverse)
@@ -40,11 +45,13 @@ gifts <- read_csv("https://raw.githubusercontent.com/tacookson/data/master/us-go
 
 ## Data inspection
 
-Let's see what the `gifts` dataset has for us!
+Let's unwrap `gifts`!
 
 ```{r inspect-data}
 # glimpse bottom of data because top doesn't have good examples
-glimpse(gifts %>% arrange(-id)) %>% View()
+gifts %>%
+  arrange(-id) %>%
+  glimpse()
 ```
 
 There are four types of data:
@@ -55,7 +62,7 @@ There are four types of data:
 4. Details about the `occasion of gifting`, like when it was received and the reason the gift was accepted  
 \  
 
-We'll focus on the `gift_description` field, which has *wonderful* free-form text descriptions. I spent *hours* reading some of these descriptions. Here is a short example of a gift given in 2003 to First Lady Laura Bush by French President Jacques Chirac.
+We'll focus on the `gift_description` field, which has *wonderful* free-form text descriptions. (I spent hours reading some of these descriptions.) Here is a short example of a gift given in 2003 to First Lady Laura Bush by French President Jacques Chirac.
 
 ```{r example-gift-description}
 gifts %>%
@@ -69,9 +76,9 @@ gifts %>%
 
 ## Text analysis with TF-IDF
 
-Explanation of steps in text analysis and what TF-IDF is
+These descriptions are great, but how do we use them to answer our question? In [*Text Mining with R*](https://www.tidytextmining.com/tfidf.html), David Robinson and Julia Silge note that "a central question in text mining and natural language processing is how to quantify **what a document is about**" (emphasis mine). One way we can do that is by looking at the individual words that make up a "document" -- in this case, a gift description. If a word (like *Hermès*) shows up a lot in descriptions from a certain country (like *France*), then we can make the argument that that word is representative of that country's gifts. It gets more complicated than that, but for now let's see if we can split up these descriptions into the individual words that comprise them -- a process known as *tokenizing*. We'll use `unnest_tokens()` from the `tidytext` package.
 
-### Tokenizing and eliminating stop words
+### Tokenizing gift descriptions
 
 ```{r gift-tokens-with-stop-words}
 gift_words_raw <- gifts %>%
@@ -80,21 +87,50 @@ gift_words_raw <- gifts %>%
   transmute(id,
             donor_country,
             gift_description = str_to_lower(gift_description)) %>%
-  # Filter out travel
+  # Filter out travel, which isn't interesting
   filter(!str_detect(gift_description, "travel")) %>%
   # Break gift_description into individual words
-  unnest_tokens(word, gift_description)
+  unnest_tokens(output = word, input = gift_description)
+```  
+\  
+
+What does the *tokenized* dataset look like?
+
+```{r tokenized-description-example}
+gift_words_raw %>%
+  head(11)
 ```
 
-Review tokenized gift words and explain why we need stop words
+Each word has its own row, but we can still read the beginning of the first description, a gift from Moldova: "40 x 29 gilt framed oil painting of an autumn landscape".
 
+What if we stopped now and looked at the most common words used in gifts from Moldova?
+
+```{r example-with-stop-words}
+gift_words_raw %>%
+  filter(donor_country == "Moldova") %>%
+  count(word, sort = TRUE) %>%
+  head(12)
+```
+
+Not very insightful. The most common word is "of", which doesn't tell me anything about distinctively *Moldovan* gifts. And it looks like there are some other words that probably appear in most or all descriptions. For example, "est" and "value" are probably common because description need to included an est(imated) value!  
+\  
+
+
+### Eliminating stop words
+
+What are stop words and what will we be using:
+
+- Normal stop words
+- Month stop words
+- Country stop words
+- Description stop words
 
 ```{r stop-words}
-# Country stop words
+# Country stop words (e.g., Afghani, Croatian, Tanzanian)
 source("https://raw.githubusercontent.com/tacookson/data/master/us-government-gifts/src/country-adjective-list.R")
 
 # Stop words specific to this dataset
-gift_stop_words <- c("x", # Used for describing dimensions
+gift_stop_words <- c("x", # Used for describing dimensions (e.g, 6" x 6")
                      "inches",
                      "est", # Common words about value and disposition
                      "rec'd",
