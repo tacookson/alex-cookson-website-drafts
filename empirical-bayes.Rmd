@@ -1,0 +1,17 @@
+---
+title: "Empirical Bayes Estimation"
+author: "Alex Cookson"
+date: "31/05/2020"
+output: html_document
+---
+
+Introduction. Children's books:
+
+1. Recommend / Don't recommend
+2. Star rating inference with shrinkage
+
+
+## Setup
+
+
+## Data inspection
