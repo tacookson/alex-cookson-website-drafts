@@ -5,7 +5,7 @@ date: "31/05/2020"
 output: html_document
 ---
 
-Introduction. Children's books:
+Introduction. Children's books ratings with breakdown of 1-5 stars:
 
 1. Recommend / Don't recommend
 2. Star rating inference with shrinkage
@@ -15,3 +15,12 @@ Introduction. Children's books:
 
 
 ## Data inspection
+
+
+## Other
+
+Things to consider:
+
+- Shrinking towards a prior distribution
+- Adding regression to account for other factors (e.g., author, number of pages, year published)
+- Normalizing: many reviews fall in a narrow band, so is there a way to get a more useful rating without having to consider most books falling between 3.9 to 4.2
