@@ -13,8 +13,102 @@ Introduction. Children's books ratings with breakdown of 1-5 stars:
 
 ## Setup
 
+```{r setup-and-import}
+library(tidyverse)
+library(scales)
+library(stats4)
+
+theme_set(theme_light())
+
+books <- read_tsv("https://raw.githubusercontent.com/tacookson/data/master/childrens-book-ratings/childrens-books.txt")
+```
+
+
 
 ## Data inspection
+
+```{r eda}
+books %>%
+  mutate(rating_count = rating_5 + rating_4 + rating_3 + rating_2 + rating_1,
+         recommend = rating_5 + rating_4,
+         dont_recommend = rating_3 + rating_2 + rating_1,
+         # rec_index = recommendation index (% of people who recommend this book)
+         rec_index = recommend / (recommend + dont_recommend)) %>%
+  filter(rating_count > 100) %>%
+  mutate(avg_rec_index = mean(rec_index)) %>%
+  ggplot(aes(rec_index)) +
+  geom_histogram(binwidth = 0.02)
+  geom_point(alpha = 0.2) +
+  geom_hline(aes(yintercept = avg_rec_index)) +
+  scale_x_continuous(labels = label_comma())
+```
+
+```{r}
+books_recommend <- books %>%
+  mutate(rating_count = rating_5 + rating_4 + rating_3 + rating_2 + rating_1,
+         recommend = rating_5 + rating_4,
+         dont_recommend = rating_3 + rating_2 + rating_1,
+         # rec_index = recommendation index (% of people who recommend this book)
+         rec_index = recommend / (recommend + dont_recommend)) %>%
+  filter(rating_count > 500) %>%
+  mutate(avg_rec_index = mean(rec_index))
+
+books_recommend %>%
+  ggplot(aes(rating_count, rec_index)) +
+  geom_point(alpha = 0.2) +
+  geom_hline(aes(yintercept = avg_rec_index), col = "red") +
+  scale_x_log10(labels = label_comma())
+```
+
+```{r log-likelihood}
+ll <- function(alpha, beta) {
+  x <- books_recommend$recommend
+  total <- books_recommend$rating_count
+  -sum(VGAM::dbetabinom.ab(x, total, alpha, beta, log = TRUE))
+}
+```
+
+```{r mle}
+m <- mle(ll, start = list(alpha = 1, beta = 1), method = "L-BFGS-B", lower = c(0.0001, 0.0001))
+
+ab <- coef(m)
+
+alpha0 <- ab[1]
+beta0 <- ab[2]
+```
+
+```{r beta-graph}
+trials <- 1e6
+
+simulations <- tibble(sample = rbeta(trials, alpha0, beta0))
+
+simulations %>%
+  ggplot(aes(sample)) +
+  geom_density()
+
+books_recommend %>%
+  ggplot(aes(rec_index)) +
+  geom_density(fill = "grey50", alpha = 0.3) +
+  geom_density(data = simulations, aes(sample), col = "red", size = 2)
+```
+
+```{r credible-intervals}
+books_recommend %>%
+  select(-rating_5:-rating_1) %>%
+  mutate(rec_index_estimate = (recommend + alpha0) / (rating_count + alpha0 + beta0)) %>%
+  ggplot(aes(rating_count, rec_index)) +
+  geom_point(alpha = 0.2) +
+  geom_hline(aes(yintercept = avg_rec_index), col = "red") +
+  scale_x_log10(labels = label_comma())
+```
+
+
+
+
+
+
+
+
 
 
 ## Other
