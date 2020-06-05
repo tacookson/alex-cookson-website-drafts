@@ -17,10 +17,19 @@ Introduction. Children's books ratings with breakdown of 1-5 stars:
 library(tidyverse)
 library(scales)
 library(stats4)
+library(broom)
 
 theme_set(theme_light())
 
-books <- read_tsv("https://raw.githubusercontent.com/tacookson/data/master/childrens-book-ratings/childrens-books.txt")
+books <- read_tsv("https://raw.githubusercontent.com/tacookson/data/master/childrens-book-ratings/childrens-books.txt") %>%
+  mutate(
+    rating_count = rating_5 + rating_4 + rating_3 + rating_2 + rating_1,
+    recommend = rating_5 + rating_4,
+    dont_recommend = rating_3 + rating_2 + rating_1,
+    # rec_index = recommendation index (% of people who recommend this book)
+    rec_index = recommend / (recommend + dont_recommend),
+    avg_rec_index = mean(rec_index, na.rm = TRUE)
+  )
 ```
 
 
@@ -29,31 +38,16 @@ books <- read_tsv("https://raw.githubusercontent.com/tacookson/data/master/child
 
 ```{r eda}
 books %>%
-  mutate(rating_count = rating_5 + rating_4 + rating_3 + rating_2 + rating_1,
-         recommend = rating_5 + rating_4,
-         dont_recommend = rating_3 + rating_2 + rating_1,
-         # rec_index = recommendation index (% of people who recommend this book)
-         rec_index = recommend / (recommend + dont_recommend)) %>%
-  filter(rating_count > 100) %>%
-  mutate(avg_rec_index = mean(rec_index)) %>%
+  filter(rating_count > 2000) %>%
   ggplot(aes(rec_index)) +
   geom_histogram(binwidth = 0.02)
-  geom_point(alpha = 0.2) +
-  geom_hline(aes(yintercept = avg_rec_index)) +
-  scale_x_continuous(labels = label_comma())
 ```
 
 ```{r}
 books_recommend <- books %>%
-  mutate(rating_count = rating_5 + rating_4 + rating_3 + rating_2 + rating_1,
-         recommend = rating_5 + rating_4,
-         dont_recommend = rating_3 + rating_2 + rating_1,
-         # rec_index = recommendation index (% of people who recommend this book)
-         rec_index = recommend / (recommend + dont_recommend)) %>%
-  filter(rating_count > 500) %>%
-  mutate(avg_rec_index = mean(rec_index))
+  filter(rating_count > 2000)
 
-books_recommend %>%
+books %>%
   ggplot(aes(rating_count, rec_index)) +
   geom_point(alpha = 0.2) +
   geom_hline(aes(yintercept = avg_rec_index), col = "red") +
@@ -93,14 +87,83 @@ books_recommend %>%
 ```
 
 ```{r credible-intervals}
-books_recommend %>%
+books_recommend_shrunk <- books %>%
   select(-rating_5:-rating_1) %>%
-  mutate(rec_index_estimate = (recommend + alpha0) / (rating_count + alpha0 + beta0)) %>%
+  mutate(rec_index_estimate = (recommend + alpha0) / (rating_count + alpha0 + beta0))
+
+books_recommend_shrunk %>%
   ggplot(aes(rating_count, rec_index)) +
   geom_point(alpha = 0.2) +
   geom_hline(aes(yintercept = avg_rec_index), col = "red") +
   scale_x_log10(labels = label_comma())
 ```
+
+```{r}
+books_recommend_shrunk %>%
+  ggplot(aes(rating_count, rec_index_estimate)) +
+  geom_point(alpha = 0.2) +
+  geom_hline(aes(yintercept = avg_rec_index), col = "red") +
+  scale_x_log10(labels = label_comma())
+```
+
+```{r}
+books %>%
+  mutate_at(vars(rating_5:rating_1), ~ . / rating_count) %>%
+  filter(rating_count > 500) %>%
+  ggplot(aes(rating_1)) +
+  geom_histogram()
+```
+
+```{r dirichlet}
+rating_matrix <- books %>%
+  filter(rating_count > 0) %>%
+  select(rating_5:rating_1) %>%
+  as.matrix()
+
+dm_fit <- DirichletMultinomial::dmn(rating_matrix, 1)
+
+tidy.DMN <- function(x, ...) {
+  ret <- as.data.frame(x@fit)
+  as_tibble(fix_data_frame(ret, c("conf.low", "estimate", "conf.high")))
+}
+
+dm_params <- tidy(dm_fit)
+
+par_total <- sum(dm_params$estimate)
+par <- dm_params %>%
+  select(term, estimate) %>%
+  pivot_wider(names_from = term, values_from = estimate)
+
+# Look up seemingly incorrect values for books with 100,000s of ratings
+books %>%
+  mutate(rating_calc = (rating_5 * 5 + rating_4 * 4 + rating_3 * 3 + rating_2 * 2 + rating_1 * 1) / (rating_count),
+         rating_5_eb = rating_5 + par$rating_5,
+         rating_4_eb = rating_4 + par$rating_4,
+         rating_3_eb = rating_3 + par$rating_3,
+         rating_2_eb = rating_2 + par$rating_2,
+         rating_1_eb = rating_1 + par$rating_1,
+         rating_eb = (rating_5_eb * 5 + rating_4_eb * 4 + rating_3_eb * 3 + rating_2_eb * 2 + rating_1_eb * 1) / (rating_count + par_total)) %>%
+  select(title, rating, rating_calc, rating_eb)
+```
+
+```{r}
+rating_pct <- books %>%
+  filter(rating_count > 0) %>%
+  mutate_at(vars(rating_5:rating_1), ~ . / rating_count) %>%
+  select(-recommend:-avg_rec_index)
+
+rating_pct %>%
+  filter(rating_count > 500) %>%
+  pivot_longer(cols = rating_5:rating_1) %>%
+  ggplot(aes(value)) +
+  geom_histogram(binwidth = 0.02) +
+  facet_wrap(~ name)
+```
+
+
+
+
+
 
 
 
