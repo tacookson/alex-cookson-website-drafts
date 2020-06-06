@@ -1,0 +1,167 @@
+---
+title: "Empirical Bayes Estimation"
+author: "Alex Cookson"
+date: "31/05/2020"
+output: html_document
+---
+
+Introduction. Children's books ratings with breakdown of 1-5 stars:
+
+1. Star rating inference with shrinkage
+2. Re-scaling to make use of full 1-5 star range
+
+
+## Setup
+
+```{r setup-and-import}
+library(tidyverse)
+library(scales)
+library(stats4)
+library(broom)
+library(gganimate)
+
+theme_set(theme_light())
+
+books <- read_tsv("https://raw.githubusercontent.com/tacookson/data/master/childrens-book-ratings/childrens-books.txt") %>%
+  mutate(rating_count = rating_5 + rating_4 + rating_3 + rating_2 + rating_1)
+```
+
+
+## Data inspection
+
+```{r}
+books %>%
+  ggplot(aes(rating)) +
+  geom_histogram(binwidth = 0.1)
+```
+
+
+```{r rating-pct-distribution}
+rating_pct <- books %>%
+  filter(rating_count > 0) %>%
+  mutate_at(vars(rating_5:rating_1), ~ . / rating_count)
+
+rating_pct %>%
+  filter(rating_count > 1000) %>%
+  pivot_longer(cols = rating_5:rating_1) %>%
+  ggplot(aes(value)) +
+  geom_histogram(binwidth = 0.02) +
+  facet_wrap(~ name)
+```
+
+```{r dirichlet}
+rating_matrix <- books %>%
+  filter(rating_count > 1000) %>%
+  select(rating_5:rating_1) %>%
+  as.matrix()
+
+# Fit a Dirichlet Multinomial distribution
+dm_fit <- DirichletMultinomial::dmn(rating_matrix, 1)
+
+tidy.DMN <- function(x, ...) {
+  ret <- as.data.frame(x@fit)
+  as_tibble(fix_data_frame(ret, c("conf.low", "estimate", "conf.high")))
+}
+
+dm_params <- tidy(dm_fit)
+
+par_total <- sum(dm_params$estimate)
+par <- dm_params %>%
+  select(term, estimate) %>%
+  pivot_wider(names_from = term, values_from = estimate)
+
+books_eb <- books %>%
+  filter(rating_count > 0) %>%
+  mutate(rating_calc = (rating_5 * 5 + rating_4 * 4 + rating_3 * 3 + rating_2 * 2 + rating_1 * 1) / (rating_count),
+         rating_5_eb = rating_5 + par$rating_5,
+         rating_4_eb = rating_4 + par$rating_4,
+         rating_3_eb = rating_3 + par$rating_3,
+         rating_2_eb = rating_2 + par$rating_2,
+         rating_1_eb = rating_1 + par$rating_1,
+         rating_eb = (rating_5_eb * 5 + rating_4_eb * 4 + rating_3_eb * 3 + rating_2_eb * 2 + rating_1_eb * 1) / (rating_count + par_total),
+         prior_eb = (par$rating_5 * 5 + par$rating_4 * 4 + par$rating_3 * 3 + par$rating_2 * 2 + par$rating_1) / par_total)
+```
+
+```{r parameter-cleaning}
+prior_avg <- par %>%
+  pivot_longer(cols = rating_5:rating_1, names_to = "rating", values_to = "rating_value") %>%
+  separate(rating, into = c("constant", "stars"), convert = TRUE) %>%
+  summarise(prior_rating = sum(stars * rating_value) / sum(rating_value))
+```
+
+
+```{r visualize-shrinkage}
+# From David Robinson's book
+
+books_eb %>%
+  filter(rating_count < 1000) %>%
+  ggplot(aes(rating, rating_eb, col = rating_count)) +
+  geom_point(alpha = 0.5) +
+  geom_abline(col = "red", size = 1) +
+  geom_hline(aes(yintercept = prior_eb), col = "red", lty = 2, size = 1) +
+  expand_limits(x = c(2, 5), y = c(2, 5))
+```
+
+```{r animation-all-ratings}
+books_shrunk <- books_eb %>%
+  select(isbn, title, rating_count, rating_calc, rating_eb) %>%
+  pivot_longer(rating_calc:rating_eb, names_to = "rating_type", values_to = "rating")
+
+p <- books_shrunk %>%
+  ggplot(aes(rating_count, rating)) +
+  geom_point(alpha = 0.2) +
+  scale_x_log10(labels = label_comma())
+
+anim <- p +
+  transition_states(rating_type,
+                    transition_length = 1.5,
+                    state_length = 3.5) +
+  ease_aes("cubic-in-out") +
+  ggtitle("Now showing {closest_state}")
+
+anim
+```
+
+```{r animation-ratings-1000}
+p_filtered <- books_shrunk %>%
+  filter(rating_count <= 500) %>%
+  ggplot(aes(rating_count, rating, col = rating_count)) +
+  geom_hline(data = prior_avg,
+             aes(yintercept = prior_rating), lty = 2, size = 1) +
+  geom_point(alpha = 0.2)
+
+anim_filtered <- p_filtered +
+  transition_states(rating_type,
+                    transition_length = 1.5,
+                    state_length = 3.5) +
+  ease_aes("cubic-in-out") +
+  ggtitle("Now showing {closest_state}")
+
+anim_filtered
+```
+
+```{r}
+# Amount that the score was changed based on shrinkage
+
+books_eb %>%
+  select(isbn, title, rating_count, rating_calc, rating_eb) %>%
+  filter(rating_count <= 500) %>%
+  mutate(rating_change = rating_eb - rating_calc) %>%
+  ggplot(aes(rating_count, rating_change)) +
+  geom_hline(yintercept = 0, lty = 2, size = 1) +
+  geom_point(alpha = 0.2)
+```
+
+
+
+## Scaling
+
+```{r scale}
+scaled <- books_eb %>%
+  select(isbn, title, rating_count, rating_eb) %>%
+  mutate(scaled_rating = (rating_eb - min(rating_eb)) / (max(rating_eb) - min(rating_eb)) * (5 - 1) + 1)
+
+scaled %>%
+  ggplot(aes(scaled_rating)) +
+  geom_histogram(binwidth = 0.1)
+```
