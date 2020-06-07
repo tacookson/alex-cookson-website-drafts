@@ -13,7 +13,7 @@ Introduction. Children's books ratings with breakdown of 1-5 stars:
 
 ## Setup
 
-```{r setup-and-import}
+```{r setup-and-import, warnings = FALSE, message = FALSE}
 library(tidyverse)
 library(scales)
 library(stats4)
@@ -25,7 +25,10 @@ library(gganimate)
 theme_set(theme_light())
 
 books <- read_tsv("https://raw.githubusercontent.com/tacookson/data/master/childrens-book-ratings/childrens-books.txt") %>%
-  mutate(rating_count = rating_5 + rating_4 + rating_3 + rating_2 + rating_1)
+  # Select only fields we're using (book identifiers and ratings)
+  select(isbn, title, rating:rating_1) %>%
+  # Get rid of duplicates
+  distinct(isbn, title, .keep_all = TRUE)
 ```
 
 
@@ -36,27 +39,30 @@ Distribution of ratings:
 - Centred on 3.whatever
 - Two spikes 
 
-```{r}
+```{r original-rating-distribution, fig.align = 'center', fig.width = 8, fig.asp = 0.618}
 books %>%
+  filter(!is.na(rating)) %>%
   ggplot(aes(rating)) +
   geom_histogram(binwidth = 0.1)
 ```
 
 
-```{r rating-pct-distribution}
+```{r rating-pct-distribution, fig.align = 'center', fig.width = 8, fig.asp = 0.618}
 rating_pct <- books %>%
   filter(rating_count > 0) %>%
   mutate_at(vars(rating_5:rating_1), ~ . / rating_count)
 
+# Filter for books with at least 500 reviews
 rating_pct %>%
-  filter(rating_count > 1000) %>%
+  filter(rating_count > 500) %>%
   pivot_longer(cols = rating_5:rating_1) %>%
   ggplot(aes(value)) +
   geom_histogram(binwidth = 0.02) +
   facet_wrap(~ name)
 ```
 
-```{r dirichlet-multinomial}
+```{r dirichlet-multinomial, message = FALSE}
+# Create a matrix to feed our MLE of Dirichlet-Multinomial
 rating_matrix <- books %>%
   filter(rating_count > 1000) %>%
   select(rating_5:rating_1) %>%
@@ -65,55 +71,68 @@ rating_matrix <- books %>%
 # Fit a Dirichlet Multinomial distribution
 dm_fit <- DirichletMultinomial::dmn(rating_matrix, 1)
 
+# Write a function to tidy DMN object (which dm_fit is)
 tidy.DMN <- function(x, ...) {
   ret <- as.data.frame(x@fit)
   as_tibble(fix_data_frame(ret, c("conf.low", "estimate", "conf.high")))
 }
 
+# Tidy the DMN fit
 dm_params <- tidy(dm_fit)
 
-par_total <- sum(dm_params$estimate)
+# Get parameters into a useful format
 par <- dm_params %>%
-  select(term, estimate) %>%
-  pivot_wider(names_from = term, values_from = estimate)
+  separate(term, into = c("constant", "rating_stars"), sep = "_", convert = TRUE) %>%
+  select(rating_stars,
+         prior_ratings = estimate)
 
+# Calculate total prior ratings and mean (used for graphing)
+par_total <- sum(par$prior_ratings)
+par_mean <- par %>%
+  summarise(prior_rating = sum(rating_stars * prior_ratings) / sum(prior_ratings)) %>%
+  pull(prior_rating)
+```
+
+```{r calculate-empirical-bayes-rating, message = FALSE}
+# Calculate empirical Bayes rating using our prior
 books_eb <- books %>%
-  filter(rating_count > 0) %>%
-  mutate(rating_calc = (rating_5 * 5 + rating_4 * 4 + rating_3 * 3 + rating_2 * 2 + rating_1 * 1) / (rating_count),
-         rating_5_eb = rating_5 + par$rating_5,
-         rating_4_eb = rating_4 + par$rating_4,
-         rating_3_eb = rating_3 + par$rating_3,
-         rating_2_eb = rating_2 + par$rating_2,
-         rating_1_eb = rating_1 + par$rating_1,
-         rating_eb = (rating_5_eb * 5 + rating_4_eb * 4 + rating_3_eb * 3 + rating_2_eb * 2 + rating_1_eb * 1) / (rating_count + par_total),
-         prior_eb = (par$rating_5 * 5 + par$rating_4 * 4 + par$rating_3 * 3 + par$rating_2 * 2 + par$rating_1) / par_total)
+  pivot_longer(rating_5:rating_1,
+               names_to = c("rating_stars"),
+               names_pattern = "rating_(.*)",
+               names_transform = list(rating_stars = as.integer),
+               values_to = "ratings") %>%
+  left_join(par, by = "rating_stars") %>%
+  group_by(isbn, title, rating_count) %>%
+  summarise(rating_calc = sum(rating_stars * ratings) / sum(ratings),
+            rating_eb = sum(rating_stars * (ratings + prior_ratings)) / sum(ratings + prior_ratings)) %>%
+  ungroup()
 ```
 
-```{r parameter-cleaning}
-prior_avg <- par %>%
-  pivot_longer(cols = rating_5:rating_1, names_to = "rating", values_to = "rating_value") %>%
-  separate(rating, into = c("constant", "stars"), convert = TRUE) %>%
-  summarise(prior_rating = sum(stars * rating_value) / sum(rating_value))
-```
 
-```{r animation-all-ratings, fig.align = 'center', fig.width = 8, fig.asp = 0.7}
+
+### Animations
+
+```{r books-shrunk-data}
 books_shrunk <- books_eb %>%
+  filter(rating_count > 0) %>%
   select(isbn, title, rating_count, rating_calc, rating_eb) %>%
   pivot_longer(rating_calc:rating_eb, names_to = "rating_type", values_to = "rating") %>%
   mutate(rating_type = ifelse(rating_type == "rating_calc", "Original Rating", "Empirical Bayes Rating"))
+```
 
+```{r animation-all-ratings, fig.align = 'center', fig.width = 8, fig.asp = 0.7}
+# Create base plot
 p <- books_shrunk %>%
   ggplot(aes(rating_count, rating, col = rating_count)) +
   geom_point(alpha = 0.2) +
-  geom_hline(data = prior_avg,
-             aes(yintercept = prior_rating),
+  geom_hline(yintercept = par_mean,
              lty = 2,
              size = 1,
              col = "red") +
   scale_colour_fish(option = "Ostracion_whitleyi", trans = "log") +
   scale_x_log10(labels = label_comma(accuracy = 1),
                 breaks = 10 ^ c(0:5)) +
-  labs(subtitle = "Dashed line show Bayesian prior for a book with 0 ratings",
+  labs(subtitle = "Dashed line shows Bayesian prior for a book with 0 ratings",
        x = "Number of ratings",
        y = "Rating") +
   theme(legend.position = "none",
@@ -122,6 +141,7 @@ p <- books_shrunk %>%
         plot.title = element_text(size = 18),
         panel.grid.minor.x = element_blank())
 
+# Set animation parameters
 anim <- p +
   transition_states(rating_type,
                     transition_length = 1.5,
@@ -129,21 +149,22 @@ anim <- p +
   ease_aes("cubic-in-out") +
   ggtitle("{closest_state}")
 
+# Create animation
 anim
 ```
 
-```{r animation-ratings-1000, fig.align = 'center', fig.width = 8, fig.asp = 0.8}
+```{r animation-500-ratings-or-less, fig.align = 'center', fig.width = 8, fig.asp = 0.7}
+# Create base plot
 p_filtered <- books_shrunk %>%
   filter(rating_count <= 500) %>%
   ggplot(aes(rating_count, rating, col = rating_count)) +
   geom_point(alpha = 0.4) +
-  geom_hline(data = prior_avg,
-             aes(yintercept = prior_rating),
+  geom_hline(yintercept = par_mean,
              lty = 2,
              size = 1,
              col = "red") +
   scale_colour_fish(option = "Ostracion_whitleyi") +
-  labs(subtitle = "Dashed line show Bayesian prior for a book with 0 ratings",
+  labs(subtitle = "Dashed line shows Bayesian prior for a book with 0 ratings",
        x = "Number of ratings",
        y = "Rating") +
   theme(legend.position = "none",
@@ -151,6 +172,7 @@ p_filtered <- books_shrunk %>%
         axis.text = element_text(size = 12),
         plot.title = element_text(size = 18))
 
+# Set animation parameters
 anim_filtered <- p_filtered +
   transition_states(rating_type,
                     transition_length = 1.5,
@@ -158,20 +180,33 @@ anim_filtered <- p_filtered +
   ease_aes("cubic-in-out") +
   ggtitle("{closest_state}")
 
+# Create animation
 anim_filtered
 ```
 
-```{r}
+```{r shrinkage-amount, fig.align = 'center', fig.width = 8, fig.asp = 0.618}
 # Amount that the score was changed based on shrinkage
-
 books_eb %>%
   select(isbn, title, rating_count, rating_calc, rating_eb) %>%
   filter(rating_count <= 500) %>%
   mutate(rating_change = rating_eb - rating_calc) %>%
-  ggplot(aes(rating_count, rating_change)) +
-  geom_hline(yintercept = 0, lty = 2, size = 1) +
-  geom_point(alpha = 0.2)
+  ggplot(aes(rating_count, rating_change, col = rating_count)) +
+  geom_point(alpha = 0.2) +
+  geom_hline(yintercept = 0, lty = 2, size = 1, col = "red") +
+  scale_colour_fish(option = "Ostracion_whitleyi") +
+  expand_limits(y = c(-1, 2)) +
+  scale_y_continuous(breaks = seq(-1, 2, by = 0.5)) +
+  labs(title = "Fewer Ratings = More Shrinkage",
+       subtitle = "As books get more ratings, our Bayesian prior has less influence",
+       x = "Number of ratings",
+       y = "Change in rating from shrinkage") +
+  theme(legend.position = "none",
+        text = element_text(family = "Bahnschrift"),
+        axis.text = element_text(size = 12),
+        plot.title = element_text(size = 18),
+        panel.grid.minor.y = element_blank())
 ```
+
 
 
 
@@ -179,8 +214,7 @@ books_eb %>%
 
 ```{r scale}
 scaled <- books_eb %>%
-  select(isbn, title, rating_count, rating_eb) %>%
-  mutate(scaled_rating = (rating_eb - min(rating_eb)) / (max(rating_eb) - min(rating_eb)) * (5 - 1) + 1)
+  mutate(scaled_rating = rescale(rating_eb, to = c(1, 5)))
 
 scaled %>%
   ggplot(aes(scaled_rating)) +
