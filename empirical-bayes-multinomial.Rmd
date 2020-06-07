@@ -18,6 +18,8 @@ library(tidyverse)
 library(scales)
 library(stats4)
 library(broom)
+library(extrafont)
+library(fishualize)
 library(gganimate)
 
 theme_set(theme_light())
@@ -28,6 +30,11 @@ books <- read_tsv("https://raw.githubusercontent.com/tacookson/data/master/child
 
 
 ## Data inspection
+
+Distribution of ratings:
+
+- Centred on 3.whatever
+- Two spikes 
 
 ```{r}
 books %>%
@@ -49,7 +56,7 @@ rating_pct %>%
   facet_wrap(~ name)
 ```
 
-```{r dirichlet}
+```{r dirichlet-multinomial}
 rating_matrix <- books %>%
   filter(rating_count > 1000) %>%
   select(rating_5:rating_1) %>%
@@ -89,53 +96,67 @@ prior_avg <- par %>%
   summarise(prior_rating = sum(stars * rating_value) / sum(rating_value))
 ```
 
-
-```{r visualize-shrinkage}
-# From David Robinson's book
-
-books_eb %>%
-  filter(rating_count < 1000) %>%
-  ggplot(aes(rating, rating_eb, col = rating_count)) +
-  geom_point(alpha = 0.5) +
-  geom_abline(col = "red", size = 1) +
-  geom_hline(aes(yintercept = prior_eb), col = "red", lty = 2, size = 1) +
-  expand_limits(x = c(2, 5), y = c(2, 5))
-```
-
-```{r animation-all-ratings}
+```{r animation-all-ratings, fig.align = 'center', fig.width = 8, fig.asp = 0.7}
 books_shrunk <- books_eb %>%
   select(isbn, title, rating_count, rating_calc, rating_eb) %>%
-  pivot_longer(rating_calc:rating_eb, names_to = "rating_type", values_to = "rating")
+  pivot_longer(rating_calc:rating_eb, names_to = "rating_type", values_to = "rating") %>%
+  mutate(rating_type = ifelse(rating_type == "rating_calc", "Original Rating", "Empirical Bayes Rating"))
 
 p <- books_shrunk %>%
-  ggplot(aes(rating_count, rating)) +
+  ggplot(aes(rating_count, rating, col = rating_count)) +
   geom_point(alpha = 0.2) +
-  scale_x_log10(labels = label_comma())
+  geom_hline(data = prior_avg,
+             aes(yintercept = prior_rating),
+             lty = 2,
+             size = 1,
+             col = "red") +
+  scale_colour_fish(option = "Ostracion_whitleyi", trans = "log") +
+  scale_x_log10(labels = label_comma(accuracy = 1),
+                breaks = 10 ^ c(0:5)) +
+  labs(subtitle = "Dashed line show Bayesian prior for a book with 0 ratings",
+       x = "Number of ratings",
+       y = "Rating") +
+  theme(legend.position = "none",
+        text = element_text(family = "Bahnschrift"),
+        axis.text = element_text(size = 12),
+        plot.title = element_text(size = 18),
+        panel.grid.minor.x = element_blank())
 
 anim <- p +
   transition_states(rating_type,
                     transition_length = 1.5,
                     state_length = 3.5) +
   ease_aes("cubic-in-out") +
-  ggtitle("Now showing {closest_state}")
+  ggtitle("{closest_state}")
 
 anim
 ```
 
-```{r animation-ratings-1000}
+```{r animation-ratings-1000, fig.align = 'center', fig.width = 8, fig.asp = 0.8}
 p_filtered <- books_shrunk %>%
   filter(rating_count <= 500) %>%
   ggplot(aes(rating_count, rating, col = rating_count)) +
+  geom_point(alpha = 0.4) +
   geom_hline(data = prior_avg,
-             aes(yintercept = prior_rating), lty = 2, size = 1) +
-  geom_point(alpha = 0.2)
+             aes(yintercept = prior_rating),
+             lty = 2,
+             size = 1,
+             col = "red") +
+  scale_colour_fish(option = "Ostracion_whitleyi") +
+  labs(subtitle = "Dashed line show Bayesian prior for a book with 0 ratings",
+       x = "Number of ratings",
+       y = "Rating") +
+  theme(legend.position = "none",
+        text = element_text(family = "Bahnschrift"),
+        axis.text = element_text(size = 12),
+        plot.title = element_text(size = 18))
 
 anim_filtered <- p_filtered +
   transition_states(rating_type,
                     transition_length = 1.5,
                     state_length = 3.5) +
   ease_aes("cubic-in-out") +
-  ggtitle("Now showing {closest_state}")
+  ggtitle("{closest_state}")
 
 anim_filtered
 ```
