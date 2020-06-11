@@ -5,18 +5,36 @@ date: "31/05/2020"
 output: html_document
 ---
 
-Introduction. Learning the idiosyncracies of rating sites:
+Ratings sites -- like Rotten Tomatoes and IMDb for movies or Goodreads for books -- are annoying. They each have their own ratings scales where the same rating means different things on different sites. Ratings often don't use the full scale. And heaven help you if you happen to come across an item with a max score but only 1 or 2 ratings.
 
-- Rotten Tomatoes: 60% not good
-- 
+The article [Whose ratings should you trust?] by Alex Olteanu does a good job of capturing my frustration. I want ratings to look like this:
 
-Children's books ratings with breakdown of 1-5 stars:
+### Picture of normal
 
-1. Star rating inference with shrinkage
-2. Re-scaling to make use of full 1-5 star range
+But end up with ratings that look like this:
+
+### Picture of actual ratings
+
+
+In this post, I will "fix" ratings by addressing two things:
+
+- Items with few ratings (Empirical Bayes estimation)
+- Not using the entire scale
+
+
+We will use a dataset of 9,000 children's books that have been rated from 1-5 stars.
+
+Specifically, you will learn to apply a Dirichlet-Multinomial conjugate prior for shrinkage (empirical Bayes estimation)
 
 
 ## Setup
+
+First, we'll load our packages and import the data. In addition to `tidyverse`, we'll use:
+
+- `scales` for nicely-formatted numbers and useful re-scaling functions
+- `stats4` and `broom` to help us with our empirical Bayes estimation
+- `extrafont` and `fishualize` to make our graphs look nice
+- `gganimate` to visualize what exactly empirical Bayes estimation does to the ratings
 
 ```{r setup-and-import, warnings = FALSE, message = FALSE}
 library(tidyverse)
@@ -32,30 +50,33 @@ theme_set(theme_light())
 books <- read_tsv("https://raw.githubusercontent.com/tacookson/data/master/childrens-book-ratings/childrens-books.txt") %>%
   # Select only fields we're using (book identifiers and ratings)
   select(isbn, title, rating:rating_1)
-```
+```  
+\  
 
-
-## Data inspection
+We're not doing any exploratory data analysis or feature engineering, so our data is simple: just the ISBN and title of the book, the raw rating, and the number of people who rated the book at each star level.
 
 ```{r data-inspection}
 books %>%
   glimpse()
-```
+```  
+\  
 
+
+### Distribution
 
 Distribution of ratings:
 
 - Centred on 3.whatever
 - Two spikes 
 
-```{r original-rating-distribution, fig.align = 'center', fig.width = 8, fig.asp = 0.618}
+```{r original-rating-distribution, fig.align = 'center', fig.width = 8, fig.asp = 0.7}
 books %>%
   filter(!is.na(rating)) %>%
   ggplot(aes(rating)) +
   geom_histogram(binwidth = 0.1)
 ```
 
-```{r rating-pct-distribution, fig.align = 'center', fig.width = 8, fig.asp = 0.618}
+```{r rating-pct-distribution, fig.align = 'center', fig.width = 8, fig.asp = 0.7}
 rating_pct <- books %>%
   filter(rating_count > 0) %>%
   mutate_at(vars(rating_5:rating_1), ~ . / rating_count)
@@ -64,9 +85,20 @@ rating_pct <- books %>%
 rating_pct %>%
   filter(rating_count > 500) %>%
   pivot_longer(cols = rating_5:rating_1) %>%
+  # Create readable label for number of stars given
+  mutate(stars_label = paste(parse_number(name), "stars"),
+         stars_label = ifelse(stars_label == "1 stars", "1 star", stars_label)) %>%
   ggplot(aes(value)) +
   geom_histogram(binwidth = 0.02) +
-  facet_wrap(~ name)
+  facet_wrap(~ stars_label) +
+  scale_x_continuous(labels = label_percent()) +
+  labs(title = "Title",
+       x = "% of ratings",
+       y = "Number of books") +
+  theme(text = element_text(family = "Bahnschrift"),
+        strip.text = element_text(size = 12, colour = "black"),
+        strip.background = element_blank(),
+        panel.grid.minor = element_blank())
 ```
 
 ```{r dirichlet-multinomial, message = FALSE}
@@ -152,7 +184,7 @@ p <- books_shrunk %>%
 anim <- p +
   transition_states(rating_type,
                     transition_length = 1.5,
-                    state_length = 3.5) +
+                    state_length = 2) +
   ease_aes("cubic-in-out") +
   ggtitle("{closest_state}")
 
@@ -187,7 +219,7 @@ p_filtered <- books_shrunk %>%
 anim_filtered <- p_filtered +
   transition_states(rating_type,
                     transition_length = 1.5,
-                    state_length = 3.5) +
+                    state_length = 1.5) +
   ease_aes("cubic-in-out") +
   ggtitle("{closest_state}")
 
@@ -238,3 +270,13 @@ scaled %>%
 ```
 
 Explanation of how we could rescale to fit a preferred shape (e.g., mean is always 3 stars, equal proportion of above average and below average books, and equal proportion of excellent and terrible books). But re-scaling with the empirical distribution maintains that there is a slight skew with small tails.
+
+
+
+## Additional Stuff
+
+Additional things we could do:
+
+- Apply to different genres
+- Extend the model to, e.g., account for books with more ratings probably being higher-rated
+- Re-scale according to an assumption on what the distribution should look like instead of the empirical distribution
