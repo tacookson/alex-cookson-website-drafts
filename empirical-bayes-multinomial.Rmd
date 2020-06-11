@@ -5,7 +5,12 @@ date: "31/05/2020"
 output: html_document
 ---
 
-Introduction. Children's books ratings with breakdown of 1-5 stars:
+Introduction. Learning the idiosyncracies of rating sites:
+
+- Rotten Tomatoes: 60% not good
+- 
+
+Children's books ratings with breakdown of 1-5 stars:
 
 1. Star rating inference with shrinkage
 2. Re-scaling to make use of full 1-5 star range
@@ -26,13 +31,17 @@ theme_set(theme_light())
 
 books <- read_tsv("https://raw.githubusercontent.com/tacookson/data/master/childrens-book-ratings/childrens-books.txt") %>%
   # Select only fields we're using (book identifiers and ratings)
-  select(isbn, title, rating:rating_1) %>%
-  # Get rid of duplicates
-  distinct(isbn, title, .keep_all = TRUE)
+  select(isbn, title, rating:rating_1)
 ```
 
 
 ## Data inspection
+
+```{r data-inspection}
+books %>%
+  glimpse()
+```
+
 
 Distribution of ratings:
 
@@ -45,7 +54,6 @@ books %>%
   ggplot(aes(rating)) +
   geom_histogram(binwidth = 0.1)
 ```
-
 
 ```{r rating-pct-distribution, fig.align = 'center', fig.width = 8, fig.asp = 0.618}
 rating_pct <- books %>%
@@ -64,7 +72,7 @@ rating_pct %>%
 ```{r dirichlet-multinomial, message = FALSE}
 # Create a matrix to feed our MLE of Dirichlet-Multinomial
 rating_matrix <- books %>%
-  filter(rating_count > 1000) %>%
+  filter(rating_count > 500) %>%
   select(rating_5:rating_1) %>%
   as.matrix()
 
@@ -107,7 +115,6 @@ books_eb <- books %>%
             rating_eb = sum(rating_stars * (ratings + prior_ratings)) / sum(ratings + prior_ratings)) %>%
   ungroup()
 ```
-
 
 
 ### Animations
@@ -153,10 +160,10 @@ anim <- p +
 anim
 ```
 
-```{r animation-500-ratings-or-less, fig.align = 'center', fig.width = 8, fig.asp = 0.7}
+```{r animation-200-ratings-or-less, fig.align = 'center', fig.width = 8, fig.asp = 0.7}
 # Create base plot
 p_filtered <- books_shrunk %>%
-  filter(rating_count <= 500) %>%
+  filter(rating_count <= 200) %>%
   ggplot(aes(rating_count, rating, col = rating_count)) +
   geom_point(alpha = 0.4) +
   geom_hline(yintercept = par_mean,
@@ -164,13 +171,17 @@ p_filtered <- books_shrunk %>%
              size = 1,
              col = "red") +
   scale_colour_fish(option = "Ostracion_whitleyi") +
-  labs(subtitle = "Dashed line shows Bayesian prior for a book with 0 ratings",
+  scale_x_continuous(breaks = seq(0, 200, by = 25)) +
+  labs(subtitle = paste0("Dashed line shows Bayesian prior for a book with 0 ratings",
+                        "\n",
+                        "(Only books with 200 ratings or less shown)"),
        x = "Number of ratings",
        y = "Rating") +
   theme(legend.position = "none",
         text = element_text(family = "Bahnschrift"),
         axis.text = element_text(size = 12),
-        plot.title = element_text(size = 18))
+        plot.title = element_text(size = 18),
+        panel.grid.minor.x = element_blank())
 
 # Set animation parameters
 anim_filtered <- p_filtered +
@@ -184,17 +195,19 @@ anim_filtered <- p_filtered +
 anim_filtered
 ```
 
-```{r shrinkage-amount, fig.align = 'center', fig.width = 8, fig.asp = 0.618}
+```{r shrinkage-amount, fig.align = 'center', fig.width = 8, fig.asp = 0.7}
 # Amount that the score was changed based on shrinkage
 books_eb %>%
+  filter(rating_count > 0) %>%
   select(isbn, title, rating_count, rating_calc, rating_eb) %>%
-  filter(rating_count <= 500) %>%
+  filter(rating_count <= 200) %>%
   mutate(rating_change = rating_eb - rating_calc) %>%
   ggplot(aes(rating_count, rating_change, col = rating_count)) +
   geom_point(alpha = 0.2) +
-  geom_hline(yintercept = 0, lty = 2, size = 1, col = "red") +
-  scale_colour_fish(option = "Ostracion_whitleyi") +
+  geom_hline(yintercept = 0, lty = 2, size = 1, col = "grey30") +
+  scale_colour_fish(option = "Oncorhynchus_keta") +
   expand_limits(y = c(-1, 2)) +
+  scale_x_continuous(breaks = seq(0, 200, by = 25)) +
   scale_y_continuous(breaks = seq(-1, 2, by = 0.5)) +
   labs(title = "Fewer Ratings = More Shrinkage",
        subtitle = "As books get more ratings, our Bayesian prior has less influence",
@@ -212,11 +225,16 @@ books_eb %>%
 
 ## Scaling
 
-```{r scale}
+```{r scale, fig.align = 'center', fig.width = 8, fig.asp = 0.7}
 scaled <- books_eb %>%
   mutate(scaled_rating = rescale(rating_eb, to = c(1, 5)))
 
+scaled_mean <- mean(scaled$scaled_rating)
+
 scaled %>%
   ggplot(aes(scaled_rating)) +
-  geom_histogram(binwidth = 0.1)
+  geom_histogram(binwidth = 0.1) +
+  geom_vline(xintercept = scaled_mean, lty = 2, size = 1, col = "red")
 ```
+
+Explanation of how we could rescale to fit a preferred shape (e.g., mean is always 3 stars, equal proportion of above average and below average books, and equal proportion of excellent and terrible books). But re-scaling with the empirical distribution maintains that there is a slight skew with small tails.
