@@ -1,35 +1,37 @@
 ---
 title: "Empirical Bayes Estimation"
 author: "Alex Cookson"
-date: "31/05/2020"
+date: "12/06/2020"
 output: html_document
 ---
 
-Ratings sites -- like Rotten Tomatoes and IMDb for movies or Goodreads for books -- are annoying. They each have their own ratings scales where the same rating means different things on different sites. Ratings often don't use the full scale. And heaven help you if you happen to come across an item with a max score but only 1 or 2 ratings.
+Ratings sites -- like Rotten Tomatoes and IMDb for movies or Goodreads for books -- are annoying. They each seem to have their norms where the same rating means different things on different sites. A rating of 60% on one site might be good, but 6/10 (equivalent to 60%) on another site might be terrible. So you need to do some extra mental work to set your expectations based on the specific site you're on.
 
-The article [Whose ratings should you trust?] by Alex Olteanu does a good job of capturing my frustration. I want ratings to look like this:
+Ratings also often don't use their full scale. If you've bought something from Amazon, you're probably familiar with this. The theoretical lower bound of ratings might be 1 star, but in reality, ratings rarely go below 3 stars. So you need to do a *second bit* of extra mental work to re-calculate the fact that "3 stars" *really* means "1 star".
+
+Sometimes you do see an item with an unambiguously good or bad score, like 5 stars or 1 star...but then you see that only one or two people have rated it. So you need to do a *third bit* of extra mental work to take number of ratings into account, since an item with 4.8 stars and 10,000 ratings is probably better than an item with 5.0 stars and 2 ratings.
+
+The article [Whose ratings should you trust?](https://www.freecodecamp.org/news/whose-reviews-should-you-trust-imdb-rotten-tomatoes-metacritic-or-fandango-7d1010c6cf19/) by Alex Olteanu does a good job of capturing my frustration. I *want* ratings to look like this:
 
 ### Picture of normal
 
-But end up with ratings that look like this:
+But ratings *actually* look like this:
 
 ### Picture of actual ratings
 
 
-In this post, I will "fix" ratings by addressing two things:
+In this post, I will "fix" some of these ratings problems:
 
-- Items with few ratings (Empirical Bayes estimation)
-- Not using the entire scale
+- Empirical Bayes estimation to address items with few ratings
+- Re-scaling to address ratings not covering the full scale
 
 
-We will use a dataset of 9,000 children's books that have been rated from 1-5 stars.
-
-Specifically, you will learn to apply a Dirichlet-Multinomial conjugate prior for shrinkage (empirical Bayes estimation)
+We will use a dataset of almost 10,000 children's books that have been rated from 1-5 stars.
 
 
 ## Setup
 
-First, we'll load our packages and import the data. In addition to `tidyverse`, we'll use:
+First, we'll load our packages and import the data. In addition to the `tidyverse`, we'll use:
 
 - `scales` for nicely-formatted numbers and useful re-scaling functions
 - `stats4` and `broom` to help us with our empirical Bayes estimation
@@ -48,12 +50,12 @@ library(gganimate)
 theme_set(theme_light())
 
 books <- read_tsv("https://raw.githubusercontent.com/tacookson/data/master/childrens-book-ratings/childrens-books.txt") %>%
-  # Select only fields we're using (book identifiers and ratings)
-  select(isbn, title, rating:rating_1)
+  # Select only fields we're using (book identifiers, author, and ratings)
+  select(isbn:author,  rating:rating_1)
 ```  
 \  
 
-We're not doing any exploratory data analysis or feature engineering, so our data is simple: just the ISBN and title of the book, the raw rating, and the number of people who rated the book at each star level.
+We're not doing any exploratory data analysis or feature engineering, so our data is simple: the book's ISBN and title, the raw overall rating, and the number of people who rated the book at each star level.
 
 ```{r data-inspection}
 books %>%
@@ -64,42 +66,86 @@ books %>%
 
 ### Distribution
 
-Distribution of ratings:
-
-- Centred on 3.whatever
-- Two spikes 
-
 ```{r original-rating-distribution, fig.align = 'center', fig.width = 8, fig.asp = 0.7}
 books %>%
   filter(!is.na(rating)) %>%
   ggplot(aes(rating)) +
-  geom_histogram(binwidth = 0.1)
+  geom_histogram(binwidth = 0.1, fill = "#461220", alpha = 0.8) +
+  labs(title = "Empirically, an \"average\" book has a 4-star rating",
+       x = "Star rating",
+       y = "Number of books") +
+  theme(text = element_text(family = "Bahnschrift"),
+        plot.title = element_text(size = 16),
+        axis.text = element_text(size = 16))
 ```
 
-```{r rating-pct-distribution, fig.align = 'center', fig.width = 8, fig.asp = 0.7}
+Observations:
+
+- Virtually nothing below 3 stars
+- Centred around 4 stars
+- Spike at 5 stars
+
+Let's look at one of these amazing 5-star books!
+
+```{r five-star-books}
+set.seed(1867)
+
+books %>%
+  filter(rating == 5) %>%
+  sample_n(1)
+```
+
+*Pickles and Cake* could be an amazing book -- three people liked it enough to give it a 5-star rating. How does it stack up against books where more people have weighed in, though? Let's compare it to the top-rated book with at least, say, 10,000 ratings:
+
+```{r highest-rated-book}
+books %>%
+  filter(rating_count >= 1e4) %>%
+  top_n(1, wt = rating)
+```
+
+[*It's a Magical World*](https://calvinandhobbes.fandom.com/wiki/It%27s_a_Magical_World) by the peerless Bill Watterson, creator of Calvin & Hobbes, which has a rating of 4.76. It has a lower rating than *Pickles and Cake*'s 5 stars, so is *Pickles and Cake* the better book? Possibly, but I'm hesitant to make that conclusion. *It's a Magical World* has more than 20,000 5-star ratings, while *Pickles and Cake* has three. I'd want to see more people to weigh in on *Pickles and Cake* before making that call.
+
+So we need more data. But we don't *have* more data. We could wait until more ratings roll in, but I don't want to.
+
+David Robinson defines shrinkage very well in his book, [*Introduction to Empirical Bayes*](http://varianceexplained.org/r/empirical-bayes-book/):
+
+> [Shrinkage is] the process of moving all our estimates towards the average. How much it moves these estimates depends on how much evidence we have: if we have very little evidence [like three ratings for *Pickles and Cake*] we move it a lot, if we have a lot of evidence [like 20,000 ratings for *It's a Magical World*] we move it only a little. That’s shrinkage in a nutshell: *Extraordinary outliers require extraordinary evidence*.
+
+
+### MLE
+
+```{r rating-pct-distribution, fig.align = 'center', fig.width = 8, fig.asp = 0.4}
 rating_pct <- books %>%
   filter(rating_count > 0) %>%
-  mutate_at(vars(rating_5:rating_1), ~ . / rating_count)
-
-# Filter for books with at least 500 reviews
-rating_pct %>%
+  mutate_at(vars(rating_5:rating_1), ~ . / rating_count) %>%
+  # Filter for books with at least 500 reviews
   filter(rating_count > 500) %>%
-  pivot_longer(cols = rating_5:rating_1) %>%
-  # Create readable label for number of stars given
-  mutate(stars_label = paste(parse_number(name), "stars"),
-         stars_label = ifelse(stars_label == "1 stars", "1 star", stars_label)) %>%
-  ggplot(aes(value)) +
-  geom_histogram(binwidth = 0.02) +
-  facet_wrap(~ stars_label) +
+  pivot_longer(cols = rating_5:rating_1,
+               names_to = "rating_level",
+               values_to = "pct_of_ratings") %>%
+  # Use Unicode symbol for full star (U+2605) and empty star (U+2606) as facet titles
+  mutate(rating_num = parse_number(rating_level),
+         stars_label = paste0(strrep("\U2605", rating_num),
+                              strrep("\u2606", 5 - rating_num)),
+         stars_label = fct_reorder(stars_label, rating_num)) %>%
+  select(-rating_num)
+
+
+rating_pct %>%
+  ggplot(aes(pct_of_ratings)) +
+  geom_histogram(binwidth = 0.025, fill = "#461220", alpha = 0.8) +
+  facet_wrap(~ stars_label, nrow = 1) +
   scale_x_continuous(labels = label_percent()) +
-  labs(title = "Title",
+  labs(title = "Proportions of ratings at each star level have their own distributions",
        x = "% of ratings",
        y = "Number of books") +
   theme(text = element_text(family = "Bahnschrift"),
-        strip.text = element_text(size = 12, colour = "black"),
+        axis.text = element_text(size = 9),
+        strip.text = element_text(size = 20, colour = "black"),
         strip.background = element_blank(),
         panel.grid.minor = element_blank())
 ```
+
 
 ```{r dirichlet-multinomial, message = FALSE}
 # Create a matrix to feed our MLE of Dirichlet-Multinomial
@@ -112,6 +158,7 @@ rating_matrix <- books %>%
 dm_fit <- DirichletMultinomial::dmn(rating_matrix, 1)
 
 # Write a function to tidy DMN object (which dm_fit is)
+# Function from http://varianceexplained.org/r/empirical-bayes-book/
 tidy.DMN <- function(x, ...) {
   ret <- as.data.frame(x@fit)
   as_tibble(fix_data_frame(ret, c("conf.low", "estimate", "conf.high")))
@@ -119,7 +166,9 @@ tidy.DMN <- function(x, ...) {
 
 # Tidy the DMN fit
 dm_params <- tidy(dm_fit)
+```
 
+```{r dirichlet-parameters}
 # Get parameters into a useful format
 par <- dm_params %>%
   separate(term, into = c("constant", "rating_stars"), sep = "_", convert = TRUE) %>%
@@ -132,6 +181,43 @@ par_mean <- par %>%
   summarise(prior_rating = sum(rating_stars * prior_ratings) / sum(prior_ratings)) %>%
   pull(prior_rating)
 ```
+
+```{r dirichlet-histograms}
+dirichlet_density <- dm_params %>%
+  select(rating_level = term, estimate) %>%
+  crossing(pct_of_ratings = seq(0, 0.8, by = 0.0125)) %>%
+  mutate(density = dbeta(pct_of_ratings, estimate, par_total - estimate)) %>%
+  # Use Unicode symbol for full star (U+2605) and empty star (U+2606) as facet titles
+  mutate(rating_num = parse_number(rating_level),
+         stars_label = paste0(strrep("\U2605", rating_num),
+                              strrep("\U2606", 5 - rating_num)),
+         stars_label = fct_reorder(stars_label, rating_num)) %>%
+  select(-rating_num)
+
+rating_pct %>%
+  ggplot(aes(pct_of_ratings)) +
+  geom_histogram(aes(y = ..density..), binwidth = 0.025, fill = "#461220", alpha = 0.8) +
+  geom_area(data = dirichlet_density, aes(y = density), fill = "#778DA9", alpha = 0.7) +
+  facet_wrap(~ stars_label, nrow = 1) +
+  scale_x_continuous(labels = label_percent()) +
+  labs(title = "Maximum-Likelihood Estimates fit the data fairly well",
+       subtitle = "Red histogram = Actual distribution | Blue curve = MLE fit",
+       x = "% of ratings",
+       y = "Density") +
+  theme(text = element_text(family = "Bahnschrift"),
+        axis.text = element_text(size = 9),
+        strip.text = element_text(size = 20, colour = "black"),
+        strip.background = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.grid.major = element_blank())
+```
+
+Observations:
+
+- Fairly good fits overall
+- MLE fit under-estimates the spread of the 5-star ratings (blue density is narrower than the empirical histogram)
+
+
 
 ```{r calculate-empirical-bayes-rating, message = FALSE}
 # Calculate empirical Bayes rating using our prior
@@ -151,7 +237,7 @@ books_eb <- books %>%
 
 ### Animations
 
-```{r books-shrunk-data}
+```{r books-shrunk-data, message = FALSE}
 books_shrunk <- books_eb %>%
   filter(rating_count > 0) %>%
   select(isbn, title, rating_count, rating_calc, rating_eb) %>%
@@ -257,16 +343,34 @@ books_eb %>%
 
 ## Scaling
 
+Using min-max scaling (is min-max scaling the right approach?)
+
+Alternative is to force it into a normal distribution using ordered quantile normalization
+
 ```{r scale, fig.align = 'center', fig.width = 8, fig.asp = 0.7}
 scaled <- books_eb %>%
   mutate(scaled_rating = rescale(rating_eb, to = c(1, 5)))
 
 scaled_mean <- mean(scaled$scaled_rating)
 
+normies <- tibble(normies = bestNormalize::orderNorm(scaled$scaled_rating)$fit)
+
+normies %>%
+  mutate(scaled = rescale(normies, to = c(1, 5))) %>%
+  ggplot(aes(scaled)) +
+  geom_histogram()
+
 scaled %>%
   ggplot(aes(scaled_rating)) +
-  geom_histogram(binwidth = 0.1) +
-  geom_vline(xintercept = scaled_mean, lty = 2, size = 1, col = "red")
+  geom_histogram(binwidth = 0.1, fill = "#461220", alpha = 0.8) +
+  geom_vline(xintercept = scaled_mean, lty = 2, size = 1, col = "grey30") +
+  labs(title = "Title",
+       x = "Scaled star rating",
+       y = "Number of books") +
+  theme(text = element_text(family = "Bahnschrift"),
+        plot.title = element_text(size = 16),
+        axis.text = element_text(size = 16),
+        panel.grid.minor.y = element_blank())
 ```
 
 Explanation of how we could rescale to fit a preferred shape (e.g., mean is always 3 stars, equal proportion of above average and below average books, and equal proportion of excellent and terrible books). But re-scaling with the empirical distribution maintains that there is a slight skew with small tails.
