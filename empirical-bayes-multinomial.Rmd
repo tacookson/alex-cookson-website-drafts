@@ -31,6 +31,7 @@ In this post, I will "fix" some of these ratings problems:
 We will use a dataset of almost 10,000 children's books that have been rated from 1-5 stars.
 
 
+
 ## Setup
 
 First, we'll load our packages and import the data. In addition to the `tidyverse`, we'll use:
@@ -64,6 +65,7 @@ books %>%
   glimpse()
 ```  
 \  
+
 
 
 ## What do the raw ratings look like?
@@ -121,15 +123,29 @@ We could wait for more ratings to roll in, but this approach has two issues. Fir
 
 Fortunately, statistics can help us. **We can initially assume a book is average until we get enough data to suggest otherwise.** There are two important pieces to that sentence:
 
-1. *We can initially assume a book is average*: This initial assumption is a **Bayesian prior**, which is what we believe before we have any data. I think this is a reasonable assumption. If I learned of a new book and knew literally nothing about it, I wouldn't assume it's amazing or terrible. I'd assume it's average until I learned more about it. (For a fun introduction to the topic, see Will Kurt's blog post [*Han Solo and Bayesian Priors*](https://www.countbayesie.com/blog/2015/2/18/hans-solo-and-bayesian-priors).)
-2. *until we get enough data to suggest otherwise*: The initial assumption is just that -- an *initial* assumption. As more people rate a book, we'll start to trust those ratings more than our assumption. As a book gets more and more ratings, our initial assumption will have less influence on what we think a book's true rating is.
+1. *We can initially assume a book is average...*: This initial assumption is a **Bayesian prior**, which is what we believe before we have any data. If I learned of a new book and knew literally nothing about it, I wouldn't assume it's amazing or terrible. I'd assume it's average until I learned more about it. (For a fun introduction to the topic, check out Will Kurt's excellent blog post [*Han Solo and Bayesian Priors*](https://www.countbayesie.com/blog/2015/2/18/hans-solo-and-bayesian-priors).)
+2. *...until we get enough data to suggest otherwise*: The initial assumption is just that -- an *initial* assumption. As more people rate a book, we'll start to trust those ratings more than our assumption. As a book gets more and more ratings, our initial assumption will have less influence on what we think a book's true rating is.
 
 This entire approach is called **shrinkage**, which David Robinson defines very well in [*Introduction to Empirical Bayes*](http://varianceexplained.org/r/empirical-bayes-book/):
 
-> [Shrinkage is] the process of moving all our estimates towards the average. How much it moves these estimates depends on how much evidence we have: if we have very little evidence [like three ratings for *Pickles and Cake*] we move it a lot, if we have a lot of evidence [like 20,000 ratings for *It's a Magical World*] we move it only a little. That’s shrinkage in a nutshell: *Extraordinary outliers require extraordinary evidence*.
+> [Shrinkage is] the process of moving all our estimates towards the average. How much it moves these estimates depends on how much evidence we have: if we have very little evidence [like three ratings for *Pickles and Cake*] we move it a lot, if we have a lot of evidence [like 20,000 ratings for *It's a Magical World*] we move it only a little. That’s shrinkage in a nutshell: *Extraordinary outliers require extraordinary evidence*.  
+\  
 
 
-### MLE
+
+## Determining the Bayesian prior
+
+(Note: I'm going to assume you're familiar with the beta and binomial distributions, since what we are about to do is an extension of those ideas. If you're not familiar, you'll probably still get the gist, but might need to do some background research to understand the technical aspects of what we're doing. Will Kurt's blog post [*Working with Probability Distributions*](https://www.countbayesie.com/blog/2015/3/17/interrogating-probability-distributions) and David Robinson's blog post [*Understanding the beta distribution (using baseball statistics)*](http://varianceexplained.org/statistics/beta_distribution_and_baseball/) are great primers.)
+
+### Distribution of star ratings
+
+- Picking an overall rating.
+- Need to estimate parameters for what goes into calculating the overall rating: number of ratings at each star level.
+- Binomial distribution describes situations with two outcomes -- in our case, might be recommend book or don't recommend book.
+- Two parameters for binomial distribution: probability of success and number of trials. Beta distribution describes the range of values for the probability parameter
+- Need to extend the binomial distribution to include multiple outcomes -- in our case, instead of recommend/don't recommend, we have five outcomes - 1-star rating, 2-star rating, etc.
+- Just as the beta distribution describes the range of values for probability of success in the binomial distribution, the Dirichlet distribution describes the range of values for the probability of each outcome being chosen for the multinomial distribution.
+- We can get an intuitive sense of this by looking at our ratings, but instead of looking at the *number* of ratings at each star level, we'll looking at *percent* of ratings for that book that are each star level.
 
 ```{r rating-pct-distribution, fig.align = 'center', fig.width = 8, fig.asp = 0.4}
 rating_pct <- books %>%
@@ -162,6 +178,18 @@ rating_pct %>%
         panel.grid.minor = element_blank())
 ```
 
+- Note that we're only looking at books with more than 500 reviews so that we're only looking at books with fairly "settled", solid ratings
+- It's clear that the percentage of a book's ratings at each star level follows a pattern: 2-star ratings are likely to comprise 0-15% of ratings and 4-star ratings are likely comprise 20-50% of ratings
+- We can extend this idea to probabilities -- if a book got a new rating, we could look at these distributions and give a rough probability for the rating being at each star level:
+- 5: 45%
+- 4: 30%
+- 3: 20%
+- 2: 4%
+- 1: 1%
+
+
+
+### Maximum likelihood estimation with the dirichlet distribution
 
 ```{r dirichlet-multinomial, message = FALSE}
 # Create a matrix to feed our MLE of Dirichlet-Multinomial
