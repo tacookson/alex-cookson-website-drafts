@@ -13,7 +13,7 @@ Ratings also often don't use their full scale. If you've bought something from A
 
 Sometimes you do see an item with an unambiguously good or bad score, like 5 stars or 1 star...but then you see that only one or two people have rated it. So you need to do a *third bit* of extra mental work to take number of ratings into account, since an item with 4.8 stars and 10,000 ratings is probably better than an item with 5.0 stars and 2 ratings.
 
-The article [Whose ratings should you trust?](https://www.freecodecamp.org/news/whose-reviews-should-you-trust-imdb-rotten-tomatoes-metacritic-or-fandango-7d1010c6cf19/) by Alex Olteanu does a good job of capturing my frustration. I *want* ratings to look like this:
+The article [*Whose ratings should you trust?*](https://www.freecodecamp.org/news/whose-reviews-should-you-trust-imdb-rotten-tomatoes-metacritic-or-fandango-7d1010c6cf19/) by Alex Olteanu does a good job of capturing my frustration. I *want* ratings to look like this:
 
 ### Picture of normal
 
@@ -22,19 +22,17 @@ But ratings *actually* look like this:
 ### Picture of actual ratings
 
 
-In this post, I will "fix" some of these ratings problems:
+In a two-post series, I will "fix" some of these ratings problems:
 
-- Empirical Bayes estimation to address items with few ratings
-- Normalizing and re-scaling to get ratings to look how I want them to look (and use their full scale)
-
-
-We will use a dataset of almost 10,000 children's books that have been rated from 1-5 stars.
+1. Address items with few ratings by using **empirical Bayes estimation** to estimate more reasonable ratings (this post)
+1. **Normalizing** and **re-scaling** ratings so that they are more interpretable (and look more like that nice, symmetrical normal curve pictured above) (*coming soon*)  
+\  
 
 
 
 ## Setup
 
-First, we'll load our packages and import the data. In addition to the `tidyverse`, we'll use:
+First, we'll load our packages and import the data. We're going to use a dataset set of about 10,000 children's books that have been rated from 1-5 stars. In terms of packages, in addition to the `tidyverse`, we'll use:
 
 - `scales` for nicely-formatted numbers and useful re-scaling functions
 - `stats4` and `broom` to help us with our empirical Bayes estimation
@@ -53,16 +51,22 @@ library(gganimate)
 theme_set(theme_light())
 
 books <- read_tsv("https://raw.githubusercontent.com/tacookson/data/master/childrens-book-ratings/childrens-books.txt") %>%
-  # Select only fields we're using (book identifiers, author, and ratings)
+  # Select only fields we're using (isbn, title, author, and ratings)
   select(isbn:author, rating:rating_1)
 ```  
 \  
 
-We're not doing any exploratory data analysis or feature engineering, so our data is simple: the book's ISBN and title, the author, the raw overall rating, and the number of people who rated the book at each star level.
+We're not doing any exploratory data analysis or feature engineering, so our data is simple: the book's ISBN and title, the author, the raw overall rating, and the number of people who rated the book at each star level:
 
 ```{r data-inspection}
+# For reproducability
+set.seed(7829)
+
 books %>%
-  glimpse()
+  sample_n(8) %>%
+  # knitr and kableExtra for formatted tables
+  knitr::kable(format = "html") %>%
+  kableExtra::kable_styling()
 ```  
 \  
 
@@ -101,18 +105,24 @@ set.seed(1867)
 
 # There are many 5-star books, so we will use sample_n() to get just one
 books %>%
-  select(title, rating:rating_1) %>%
+  select(title, author, rating:rating_1) %>%
   filter(rating == 5) %>%
-  sample_n(1)
+  sample_n(1) %>%
+  # knitr and kableExtra for formatted tables
+  knitr::kable(format = "html") %>%
+  kableExtra::kable_styling()
 ```
 
 One of them is a book called [*Pickles and Cake*](https://books.google.ca/books/about/Pickles_and_Cake.html?id=t4UljwEACAAJ&redir_esc=y). This could be an amazing book -- three people liked it enough to give it a 5-star rating. But how does it stack up against books where more people have weighed in? Let's compare it to the top-rated book with at least, say, 10,000 ratings:
 
 ```{r highest-rated-book}
 books %>%
-  select(title, rating:rating_1) %>%
+  select(title, author, rating:rating_1) %>%
   filter(rating_count >= 1e4) %>%
-  top_n(1, wt = rating)
+  top_n(1, wt = rating) %>%
+  # knitr and kableExtra for formatted tables
+  knitr::kable(format = "html") %>%
+  kableExtra::kable_styling()
 ```
 
 That book is [*It's a Magical World*](https://calvinandhobbes.fandom.com/wiki/It%27s_a_Magical_World) by the peerless Bill Watterson, creator of Calvin & Hobbes, with a rating of 4.76. It has a lower rating than *Pickles and Cake*'s 5 stars, so is *Pickles and Cake* the better book? Possibly, but I'm hesitant to make that conclusion. *It's a Magical World* has more than 20,000 5-star ratings, while *Pickles and Cake* has three. I'd want to see more people to weigh in on *Pickles and Cake* before making that call.
@@ -124,28 +134,31 @@ We could wait for more ratings to roll in, but this approach has two issues. Fir
 Fortunately, statistics can help us. **We can initially assume a book is average until we get enough data to suggest otherwise.** There are two important pieces to that sentence:
 
 1. *We can initially assume a book is average...*: This initial assumption is a **Bayesian prior**, which is what we believe before we have any data. If I learned of a new book and knew literally nothing about it, I wouldn't assume it's amazing or terrible. I'd assume it's average until I learned more about it. (For a fun introduction to the topic, check out Will Kurt's excellent blog post [*Han Solo and Bayesian Priors*](https://www.countbayesie.com/blog/2015/2/18/hans-solo-and-bayesian-priors).)
-2. *...until we get enough data to suggest otherwise*: The initial assumption is just that -- an *initial* assumption. As more people rate a book, we'll start to trust those ratings more than our assumption. As a book gets more and more ratings, our initial assumption will have less influence on what we think a book's true rating is.
+1. *...until we get enough data to suggest otherwise*: The initial assumption is just that -- an *initial* assumption. As more people rate a book, we'll start to trust those ratings more than our assumption. As a book gets more and more ratings, our initial assumption will have less influence on what we think a book's true rating is.
 
 This entire approach is called **shrinkage**, which David Robinson defines very well in [*Introduction to Empirical Bayes*](http://varianceexplained.org/r/empirical-bayes-book/):
 
-> [Shrinkage is] the process of moving all our estimates towards the average. How much it moves these estimates depends on how much evidence we have: if we have very little evidence [like three ratings for *Pickles and Cake*] we move it a lot, if we have a lot of evidence [like 20,000 ratings for *It's a Magical World*] we move it only a little. That’s shrinkage in a nutshell: *Extraordinary outliers require extraordinary evidence*.  
+> [Shrinkage is] the process of moving all our estimates towards the average. How much it moves these estimates depends on how much evidence we have: if we have very little evidence [like three ratings for *Pickles and Cake*] we move it a lot, if we have a lot of evidence [like 20,000 ratings for *It's a Magical World*] we move it only a little. That’s shrinkage in a nutshell: *Extraordinary outliers require extraordinary evidence*.
+  
 \  
 
 
 
 ## Determining the Bayesian prior
 
-(Note: I'm going to assume you're familiar with the beta and binomial distributions, since what we are about to do is an extension of those ideas. If you're not familiar, you'll probably still get the gist, but might need to do some background research to understand the technical aspects of what we're doing. Will Kurt's blog post [*Working with Probability Distributions*](https://www.countbayesie.com/blog/2015/3/17/interrogating-probability-distributions) and David Robinson's blog post [*Understanding the beta distribution (using baseball statistics)*](http://varianceexplained.org/statistics/beta_distribution_and_baseball/) are great primers.)
+(Note: It will help if you know about the beta and binomial distributions, since what we are about to do is an extension of those ideas. If you're not familiar, you'll probably still get the gist, but might find some background research useful. Will Kurt's blog post [*Working with Probability Distributions*](https://www.countbayesie.com/blog/2015/3/17/interrogating-probability-distributions) and David Robinson's blog post [*Understanding the beta distribution (using baseball statistics)*](http://varianceexplained.org/statistics/beta_distribution_and_baseball/) are great primers.)  
+\  
+
 
 ### Distribution of star ratings
 
-- Picking an overall rating.
-- Need to estimate parameters for what goes into calculating the overall rating: number of ratings at each star level.
-- Binomial distribution describes situations with two outcomes -- in our case, might be recommend book or don't recommend book.
-- Two parameters for binomial distribution: probability of success and number of trials. Beta distribution describes the range of values for the probability parameter
-- Need to extend the binomial distribution to include multiple outcomes -- in our case, instead of recommend/don't recommend, we have five outcomes - 1-star rating, 2-star rating, etc.
-- Just as the beta distribution describes the range of values for probability of success in the binomial distribution, the Dirichlet distribution describes the range of values for the probability of each outcome being chosen for the multinomial distribution.
-- We can get an intuitive sense of this by looking at our ratings, but instead of looking at the *number* of ratings at each star level, we'll looking at *percent* of ratings for that book that are each star level.
+We already looked at the distribution of the *overall* rating, but to determine our prior, we'll need to understand the distribution of ratings for *each star level*. Specifically, we're going to look at the percent of a book's ratings that are at each level.
+
+**Why is that important?** It turns out that the distribution of ratings at each star level fits well with the [Dirichlet distribution](https://en.wikipedia.org/wiki/Dirichlet_distribution), which describes the range of possible probabilities for multiple outcomes. In our case, these outcomes are 1-star rating, 2-star rating, etc.
+
+If you're familiar with the beta distribution, the Dirichlet is conceptually similar, except that the Dirichlet can apply to more than two outcomes, whereas the beta distribution applies *only* to situations with two outcomes. (In fact, the Dirichlet is just the more-than-two-outcomes generalization of the beta distribution. A two-outcome Dirichlet *is* a beta distribution.)
+
+Again, **why is this important?** If we look at books with enough ratings that their overall rating has "settled", fitting a Dirichlet distribution will give us a sense of what a good estimate of the percent of a book's ratings at each star level will be. Visualizing it will help. These are the distributions for books with at least 500 ratings:
 
 ```{r rating-pct-distribution, fig.align = 'center', fig.width = 8, fig.asp = 0.4}
 rating_pct <- books %>%
@@ -178,18 +191,15 @@ rating_pct %>%
         panel.grid.minor = element_blank())
 ```
 
-- Note that we're only looking at books with more than 500 reviews so that we're only looking at books with fairly "settled", solid ratings
-- It's clear that the percentage of a book's ratings at each star level follows a pattern: 2-star ratings are likely to comprise 0-15% of ratings and 4-star ratings are likely comprise 20-50% of ratings
-- We can extend this idea to probabilities -- if a book got a new rating, we could look at these distributions and give a rough probability for the rating being at each star level:
-- 5: 45%
-- 4: 30%
-- 3: 20%
-- 2: 4%
-- 1: 1%
+The percent of a book's ratings at each star level tends toward certain values. For example, 2-star ratings are likely to constitute 0-15% of ratings, while 4-star ratings are likely to constitute 20-50% of ratings. So, if a book got a new rating, we could look at these distributions to get an idea of how likely it is that this new rating will be for 1, 2, 3, 4, or 5 stars (1%, 4%, 20%, 30%, and 45%, respectively).
+
+We can now use this data to fit a **Dirichlet-multinomial** distribution that will give us an actual **number** of ratings at each star level instead of a probability for one rating. This, in effect, gives us "starter ratings" to use for each book. So we will treat a book with zero real ratings as having, say, 40 or 50 ratings that start the book off with an average overall rating. This is how our shrinkage works: a book's first few ratings will be tempered by our "starter ratings", but as a book gets more real ratings, those real ratings will have more of an effect on the overall rating.  
+\  
 
 
+### Maximum likelihood estimation
 
-### Maximum likelihood estimation with the dirichlet distribution
+We use **maximum likelihood estimation** to estimate the parameters of the Dirichlet-multinomial distribution using the [`DirichletMultinomial`](http://bioconductor.org/packages/release/bioc/html/DirichletMultinomial.html) package. (For an introduction to maximum likelihood estimation, I recommend this [StatQuest video](https://www.youtube.com/watch?v=Dn6b9fCIUpM) by Josh Starmer.)
 
 ```{r dirichlet-multinomial, message = FALSE}
 # Create a matrix to feed our MLE of Dirichlet-Multinomial
@@ -202,6 +212,7 @@ rating_matrix <- books %>%
 dm_fit <- DirichletMultinomial::dmn(rating_matrix, 1)
 
 # Write a function to tidy DMN object (which dm_fit is)
+# (broom's tidy() doesn't work on DMN objects)
 # Function from http://varianceexplained.org/r/empirical-bayes-book/
 tidy.DMN <- function(x, ...) {
   ret <- as.data.frame(x@fit)
@@ -209,12 +220,10 @@ tidy.DMN <- function(x, ...) {
 }
 
 # Tidy the DMN fit
-dm_params <- tidy(dm_fit)
-```
+tidy_dm <- tidy(dm_fit)
 
-```{r dirichlet-parameters}
 # Get parameters into a useful format
-par <- dm_params %>%
+par <- tidy_dm %>%
   separate(term, into = c("constant", "rating_stars"), sep = "_", convert = TRUE) %>%
   select(rating_stars,
          prior_ratings = estimate)
@@ -224,10 +233,24 @@ par_total <- sum(par$prior_ratings)
 par_mean <- par %>%
   summarise(prior_rating = sum(rating_stars * prior_ratings) / sum(prior_ratings)) %>%
   pull(prior_rating)
+```  
+\  
+
+
+The result is a fairly simple dataframe with the number of starter ratings each star level gets:
+
+```{r dmn-parameters}
+par %>%
+  knitr::kable(format = "html") %>%
+  kableExtra::kable_styling()
 ```
 
-```{r dirichlet-histograms, fig.align = 'center', fig.width = 8, fig.asp = 0.4}
-dirichlet_density <- dm_params %>%
+So a book with zero ratings, using our empirical Bayes estimate, will have about **`r comma(par_total, accuracy = 1)` "starter ratings"** and an **overall rating of `r comma(par_mean, accuracy = 0.01)`**. Again, this will change as a books gets real ratings, but it will be less prone to, for example, a few good ratings resulting in an overall rating of 5 stars.
+
+
+
+```{r dirichlet-histograms, fig.align = 'center', fig.width = 8, fig.asp = 0.45}
+dirichlet_density <- tidy_dm %>%
   select(rating_level = term, estimate) %>%
   crossing(pct_of_ratings = seq(0, 0.8, by = 0.0125)) %>%
   mutate(density = dbeta(pct_of_ratings, estimate, par_total - estimate)) %>%
@@ -289,42 +312,9 @@ books_shrunk <- books_eb %>%
   mutate(rating_type = ifelse(rating_type == "rating_calc", "Original Rating", "Empirical Bayes Rating"))
 ```
 
-```{r animation-all-ratings, fig.align = 'center', fig.width = 8, fig.asp = 0.7}
-# Create base plot
-p <- books_shrunk %>%
-  ggplot(aes(rating_count, rating, col = rating_count)) +
-  geom_point(alpha = 0.2) +
-  geom_hline(yintercept = par_mean,
-             lty = 2,
-             size = 1,
-             col = "red") +
-  scale_colour_fish(option = "Ostracion_whitleyi", trans = "log") +
-  scale_x_log10(labels = label_comma(accuracy = 1),
-                breaks = 10 ^ c(0:5)) +
-  labs(subtitle = "Dashed line shows Bayesian prior for a book with 0 ratings",
-       x = "Number of ratings",
-       y = "Rating") +
-  theme(legend.position = "none",
-        text = element_text(family = "Bahnschrift"),
-        plot.title = element_text(size = 18),
-        axis.text = element_text(size = 16),
-        panel.grid.minor.x = element_blank())
-
-# Set animation parameters
-anim <- p +
-  transition_states(rating_type,
-                    transition_length = 1.5,
-                    state_length = 2) +
-  ease_aes("cubic-in-out") +
-  ggtitle("{closest_state}")
-
-# Create animation
-anim
-```
-
 ```{r animation-200-ratings-or-less, fig.align = 'center', fig.width = 8, fig.asp = 0.7}
 # Create base plot
-p_filtered <- books_shrunk %>%
+p <- books_shrunk %>%
   filter(rating_count <= 200) %>%
   ggplot(aes(rating_count, rating, col = rating_count)) +
   geom_point(alpha = 0.4) +
@@ -346,7 +336,7 @@ p_filtered <- books_shrunk %>%
         panel.grid.minor.x = element_blank())
 
 # Set animation parameters
-anim_filtered <- p_filtered +
+anim <- p +
   transition_states(rating_type,
                     transition_length = 1.5,
                     state_length = 1.5) +
@@ -354,34 +344,7 @@ anim_filtered <- p_filtered +
   ggtitle("{closest_state}")
 
 # Create animation
-anim_filtered
-```
-
-```{r shrinkage-amount, fig.align = 'center', fig.width = 8, fig.asp = 0.7}
-# Amount that the score was changed based on shrinkage
-books_eb %>%
-  filter(rating_count > 0) %>%
-  select(isbn:author, rating_count, rating_calc, rating_eb) %>%
-  filter(rating_count <= 200) %>%
-  mutate(rating_change = rating_eb - rating_calc) %>%
-  ggplot(aes(rating_count, rating_change, col = rating_count)) +
-  geom_point(alpha = 0.2) +
-  geom_hline(yintercept = 0, lty = 2, size = 1, col = "grey30") +
-  scale_colour_fish(option = "Oncorhynchus_keta") +
-  expand_limits(y = c(-1, 2)) +
-  scale_x_continuous(breaks = seq(0, 200, by = 25)) +
-  scale_y_continuous(breaks = seq(-1, 2, by = 0.5)) +
-  labs(title = "Fewer Ratings = More Shrinkage",
-       subtitle = paste0("As books get more ratings, our Bayesian prior has less influence",
-                         "\n",
-                         "(This one is not an animation!)"),
-       x = "Number of ratings",
-       y = "Change in rating from shrinkage") +
-  theme(legend.position = "none",
-        text = element_text(family = "Bahnschrift"),
-        plot.title = element_text(size = 18),
-        axis.text = element_text(size = 16),
-        panel.grid.minor.y = element_blank())
+anim
 ```
 
 
