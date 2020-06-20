@@ -1,0 +1,55 @@
+---
+title: "caribou-location-tracking"
+author: "Alex Cookson"
+date: "18/06/2020"
+output: html_document
+---
+
+```{r setup-and-import, message = FALSE, warning = FALSE}
+library(tidyverse)
+library(lubridate)
+library(gganimate)
+
+caribou <- read_csv("https://raw.githubusercontent.com/tacookson/data/master/caribou-location-tracking/locations.csv")
+```
+
+```{r eda}
+caribou %>%
+  count(year(timestamp), sort = TRUE)
+```
+
+```{r animation-graham}
+df <- caribou %>%
+  filter(study_site == "Graham",
+         year(timestamp) == 2002) %>%
+  group_by(animal_id) %>%
+  filter(as_date(min(timestamp)) == "2002-01-01",
+         as_date(max(timestamp)) == "2002-12-31") %>%
+  ungroup() %>%
+  group_by(animal_id, date = as_date(timestamp)) %>%
+  summarise(longitude_centroid = mean(longitude),
+            latitude_centroid = mean(latitude)) %>%
+  ungroup() %>%
+  complete(animal_id, date) %>%
+  arrange(animal_id, date) %>%
+  fill(longitude_centroid, latitude_centroid, .direction = "down")
+  
+p <- df %>%
+  ggplot(aes(longitude_centroid, latitude_centroid, col = animal_id)) +
+  geom_point(size = 2) +
+  coord_map() +
+  theme_void() +
+  theme(legend.position = "none") +
+  transition_time(time = date) +
+  shadow_mark(alpha = 0.2, size = 0.8) +
+  ggtitle("Caribou location on {frame_time}")
+
+anim <- animate(p,
+        nframes = 1000,
+        end_pause = 50)
+
+anim_save("caribou-locations.gif", anim)
+```
+
+
+
