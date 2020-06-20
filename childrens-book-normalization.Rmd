@@ -1,0 +1,171 @@
+---
+title: "Normalizing star ratings of children's books"
+author: "Alex Cookson"
+date: "12/06/2020"
+output: html_document
+---
+
+### To-do List
+
+- Split `normalize-and-rescale` chunk into separate chunks: one for rescaling, another for normalizing
+
+
+## Introduction
+
+In a two-post series, I will "fix" some of these ratings problems:
+
+1. Address items with few ratings by using **empirical Bayes estimation** to estimate more reasonable ratings (this post)
+1. **Normalizing and re-scaling** ratings so that they are easier to interpret (and look more like that nice, symmetrical normal curve pictured above) (*coming soon*)
+
+
+Two pieces:
+
+1. Rescale so that we use the full size of distribution
+1. Normalize so that ratings have a nice round mean and equal proportion of books above and below the mean (mean == median)
+
+
+## Setup
+
+First, we'll load our packages and import the data. We're going to use a dataset set of about 9,000 children's books that have been rated from 1-5 stars. In terms of packages, in addition to the `tidyverse`, we'll use:
+
+- `bestNormalize` for normalization functions
+- `scales` for useful re-scaling functions
+- `extrafont` to make our graphs look nice
+- `gganimate` to visualize what exactly empirical Bayes estimation does to the ratings
+
+```{r setup-and-import, warnings = FALSE, message = FALSE}
+library(tidyverse)
+library(bestNormalize)
+library(scales)
+library(extrafont)
+library(gganimate)
+
+theme_set(theme_light())
+
+books_eb <- read_tsv("https://raw.githubusercontent.com/tacookson/data/master/childrens-book-ratings/childrens-books-empirical-bayes-ratings.txt")
+```
+
+## Starting point
+
+```{r eb-rating-distribution, fig.align = 'center', fig.width = 8, fig.asp = 0.7}
+books_eb %>%
+  ggplot(aes(rating_eb)) +
+  geom_histogram(binwidth = 0.1, fill = "#461220", alpha = 0.8) +
+  expand_limits(x = 1) +
+  labs(title = "Title",
+       subtitle = "Subtitle",
+       x = "Star rating",
+       y = "Number of books") +
+  theme(text = element_text(family = "Bahnschrift"),
+        plot.title = element_text(size = 18),
+        axis.text = element_text(size = 16))
+```
+
+## Rescaling
+
+```{r animation-rescaling, fig.align = 'center', fig.width = 8, fig.asp = 0.7}
+# Get data in format to be animated
+scaled_anim <- scaled %>%
+  select(isbn, rating_eb, scaled_eb) %>%
+  mutate(rating_eb_mean_centred = rating_eb - mean(rating_eb),
+         scaled_eb_mean_centred = scaled_eb - mean(scaled_eb)) %>%
+  pivot_longer(rating_eb_mean_centred:scaled_eb_mean_centred, names_to = "scale", values_to = "rating") %>%
+  mutate(scale = ifelse(scale == "rating_eb_mean_centred", "Non-Rescaled Rating", "Rescaled Rating"))
+
+# Create base plot
+p_rescaling <- scaled_anim %>%
+  ggplot(aes(rating)) +
+  geom_histogram(binwidth = 0.1, fill = "#778DA9", alpha = 0.8) +
+  labs(subtitle = "Rescaling widens the distribution: bad ratings get worse and good ratings get better",
+       x = "Mean-centred star rating",
+       y = "Number of books") +
+  theme(text = element_text(family = "Bahnschrift"),
+        plot.title = element_text(size = 18),
+        axis.text = element_text(size = 16),
+        panel.grid.minor.y = element_blank())
+
+# Set animation parameters
+anim_rescaling <- p_rescaling +
+  transition_states(scale,
+                    transition_length = 1.5,
+                    state_length = 1.5) +
+  shadow_mark(past = TRUE, future = TRUE, alpha = 0.2) +
+  ggtitle("{previous_state}")
+
+# Create animation
+anim_rescaling
+```
+
+```{r rescaled-rating-distribution, fig.align = 'center', fig.width = 8, fig.asp = 0.7}
+rescaled_mean <- mean(scaled$scaled_eb)
+
+
+## TO DO: Add annotation of where the mean rating is
+scaled %>%
+  ggplot(aes(scaled_eb)) +
+  geom_histogram(binwidth = 0.1, fill = "#461220", alpha = 0.8) +
+  geom_vline(xintercept = rescaled_mean, lty = 2, size = 1.5, col = "grey90") +
+  expand_limits(x = 1) +
+  labs(title = "Rescaled distribution is pretty good, but still skewed",
+       subtitle = "Mean is still a non-round number -- ~ 3.2ish",
+       x = "Rescaled star rating",
+       y = "Number of books") +
+  theme(text = element_text(family = "Bahnschrift"),
+        plot.title = element_text(size = 18),
+        axis.text = element_text(size = 16))
+```
+
+
+## Normalizing
+
+Force it into a normal distribution using ordered quantile normalization, then re-scale from 1 to 5:
+
+- Rankings are preserved (so the top-rated book will remain the top-rated book and the book with, say, the 455th-highest rating stays as the 455th-highest rated book)
+- Score changes to fit a normal distribution (why is normal distribution desirable? It is symmetrical and it concentrates books around the mean, so most books are around average, but you get a few exceptionally good and exceptionally bad books)
+
+```{r normalize-and-rescale}
+# Use orderNorm() from {bestNormalize} package for ordered quantile normalization
+orq_model <- orderNorm(books_eb$rating_eb, warn = FALSE)
+
+# Create tibble with normalized fitted values
+normalized <- tibble(rating_norm = predict(orq_model, newdata = books_eb$rating_eb))
+
+# Add normalized rating to original data and rescale to be 1-5
+scaled <- bind_cols(books_eb, normalized) %>%
+  mutate(scaled_eb = rescale(rating_eb, to = c(1, 5)),
+         scaled_norm = rescale(rating_norm, to = c(1, 5)))
+```
+
+
+```{r animation-normalizing, fig.align = 'center', fig.width = 8, fig.asp = 0.7}
+# Get data in format to be animated
+scaled_anim <- scaled %>%
+  select(isbn, scaled_eb, scaled_norm) %>%
+  pivot_longer(-isbn, names_to = "scale", values_to = "rating") %>%
+  mutate(scale = ifelse(scale == "scaled_eb", "Non-Normalized Rating", "Normalized Rating"))
+
+# Create base plot
+p_normalizing <- scaled_anim %>%
+  ggplot(aes(rating)) +
+  geom_histogram(binwidth = 0.1, fill = "#778DA9", alpha = 0.8) +
+  labs(subtitle = "Normalization squeezes some higher ratings down, filling out the left of the distribution",
+       x = "Scaled star rating",
+       y = "Number of books") +
+  theme(text = element_text(family = "Bahnschrift"),
+        plot.title = element_text(size = 18),
+        axis.text = element_text(size = 16),
+        panel.grid.minor.y = element_blank())
+
+# Set animation parameters
+anim_normalizing <- p_normalizing +
+  transition_states(scale,
+                    transition_length = 1.5,
+                    state_length = 1.5) +
+  shadow_mark(past = TRUE, future = TRUE, alpha = 0.2) +
+  ggtitle("{previous_state}")
+
+# Create animation
+anim_normalizing
+```
+
+Explanation of how normalizing is a judgement call and that even though we change some of the rating data, we benefit from increased interpretability (mean rating of 3 and equal proportion of books above and below that).
