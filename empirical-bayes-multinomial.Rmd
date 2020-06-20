@@ -25,19 +25,20 @@ But ratings *actually* look like this:
 In a two-post series, I will "fix" some of these ratings problems:
 
 1. Address items with few ratings by using **empirical Bayes estimation** to estimate more reasonable ratings (this post)
-1. **Normalizing** and **re-scaling** ratings so that they are more interpretable (and look more like that nice, symmetrical normal curve pictured above) (*coming soon*)  
+1. **Normalizing and re-scaling** ratings so that they are easier to interpret (and look more like that nice, symmetrical normal curve pictured above) (*coming soon*)  
 \  
 
 
 
 ## Setup
 
-First, we'll load our packages and import the data. We're going to use a dataset set of about 10,000 children's books that have been rated from 1-5 stars. In terms of packages, in addition to the `tidyverse`, we'll use:
+First, we'll load our packages and import the data. We're going to use a dataset set of about 9,000 children's books that have been rated from 1-5 stars. In terms of packages, in addition to the `tidyverse`, we'll use:
 
 - `scales` for nicely-formatted numbers and useful re-scaling functions
 - `stats4` and `broom` to help us with our empirical Bayes estimation
 - `extrafont` and `fishualize` to make our graphs look nice
 - `gganimate` to visualize what exactly empirical Bayes estimation does to the ratings
+- `knitr` and `kableExtra` to get nicely-formatted tables for this post (not necessary if you're just doing this in RStudio)
 
 ```{r setup-and-import, warnings = FALSE, message = FALSE}
 library(tidyverse)
@@ -47,6 +48,8 @@ library(broom)
 library(extrafont)
 library(fishualize)
 library(gganimate)
+library(knitr)
+library(kableExtra)
 
 theme_set(theme_light())
 
@@ -63,10 +66,9 @@ We're not doing any exploratory data analysis or feature engineering, so our dat
 set.seed(7829)
 
 books %>%
-  sample_n(8) %>%
-  # knitr and kableExtra for formatted tables
-  knitr::kable(format = "html") %>%
-  kableExtra::kable_styling()
+  sample_n(6) %>%
+  kable(format = "html") %>%
+  kable_styling()
 ```  
 \  
 
@@ -108,9 +110,8 @@ books %>%
   select(title, author, rating:rating_1) %>%
   filter(rating == 5) %>%
   sample_n(1) %>%
-  # knitr and kableExtra for formatted tables
-  knitr::kable(format = "html") %>%
-  kableExtra::kable_styling()
+  kable(format = "html") %>%
+  kable_styling()
 ```
 
 One of them is a book called [*Pickles and Cake*](https://books.google.ca/books/about/Pickles_and_Cake.html?id=t4UljwEACAAJ&redir_esc=y). This could be an amazing book -- three people liked it enough to give it a 5-star rating. But how does it stack up against books where more people have weighed in? Let's compare it to the top-rated book with at least, say, 10,000 ratings:
@@ -120,9 +121,8 @@ books %>%
   select(title, author, rating:rating_1) %>%
   filter(rating_count >= 1e4) %>%
   top_n(1, wt = rating) %>%
-  # knitr and kableExtra for formatted tables
-  knitr::kable(format = "html") %>%
-  kableExtra::kable_styling()
+  kable(format = "html") %>%
+  kable_styling()
 ```
 
 That book is [*It's a Magical World*](https://calvinandhobbes.fandom.com/wiki/It%27s_a_Magical_World) by the peerless Bill Watterson, creator of Calvin & Hobbes, with a rating of 4.76. It has a lower rating than *Pickles and Cake*'s 5 stars, so is *Pickles and Cake* the better book? Possibly, but I'm hesitant to make that conclusion. *It's a Magical World* has more than 20,000 5-star ratings, while *Pickles and Cake* has three. I'd want to see more people to weigh in on *Pickles and Cake* before making that call.
@@ -197,9 +197,9 @@ We can now use this data to fit a **Dirichlet-multinomial** distribution that wi
 \  
 
 
-### Maximum likelihood estimation
+### Maximum likelihood estimation of the Dirichlet-Multinomial distribution
 
-We use **maximum likelihood estimation** to estimate the parameters of the Dirichlet-multinomial distribution using the [`DirichletMultinomial`](http://bioconductor.org/packages/release/bioc/html/DirichletMultinomial.html) package. (For an introduction to maximum likelihood estimation, I recommend this [StatQuest video](https://www.youtube.com/watch?v=Dn6b9fCIUpM) by Josh Starmer.)
+We use **maximum likelihood estimation** (MLE) to estimate the parameters of the Dirichlet-Multinomial distribution using the [`DirichletMultinomial`](http://bioconductor.org/packages/release/bioc/html/DirichletMultinomial.html) package. (For an introduction to maximum likelihood estimation, I recommend this [StatQuest video](https://www.youtube.com/watch?v=Dn6b9fCIUpM) by Josh Starmer.)
 
 ```{r dirichlet-multinomial, message = FALSE}
 # Create a matrix to feed our MLE of Dirichlet-Multinomial
@@ -209,6 +209,7 @@ rating_matrix <- books %>%
   as.matrix()
 
 # Fit a Dirichlet Multinomial distribution
+# Input is a matrix of rating counts at each star level
 dm_fit <- DirichletMultinomial::dmn(rating_matrix, 1)
 
 # Write a function to tidy DMN object (which dm_fit is)
@@ -241,13 +242,17 @@ The result is a fairly simple dataframe with the number of starter ratings each 
 
 ```{r dmn-parameters}
 par %>%
-  knitr::kable(format = "html") %>%
-  kableExtra::kable_styling()
+  kable(format = "html") %>%
+  kable_styling()
 ```
 
-So a book with zero ratings, using our empirical Bayes estimate, will have about **`r comma(par_total, accuracy = 1)` "starter ratings"** and an **overall rating of `r comma(par_mean, accuracy = 0.01)`**. Again, this will change as a books gets real ratings, but it will be less prone to, for example, a few good ratings resulting in an overall rating of 5 stars.
+So a book with zero ratings, using our empirical Bayes estimate, will start with `r comma(par %>% filter(rating_stars == 5) %>% pull(prior_ratings), accuracy = 0.01)` 5-star ratings, `r comma(par %>% filter(rating_stars == 4) %>% pull(prior_ratings), accuracy = 0.01)` 4-star ratings, etc. (I know it doesn't make sense to have fractions of ratings, but we're not talking about real ratings -- we can still calculate an overall rating with fractions.)
+
+Overall, our prior gives us about **`r comma(par_total, accuracy = 1)` "starter ratings"** and an **overall rating of `r comma(par_mean, accuracy = 0.01)` stars**. Again, this will change as a book gets real ratings, but we'll be less likely to find ourselves in a *Pickles and Cake* situation where a few good ratings skyrockets a book up to a perfect 5-star rating.  
+\  
 
 
+Here's what the Dirichlet fits from MLE look like (light blue curves) compared to the actual distribution of ratings (red histograms):
 
 ```{r dirichlet-histograms, fig.align = 'center', fig.width = 8, fig.asp = 0.45}
 dirichlet_density <- tidy_dm %>%
@@ -279,12 +284,13 @@ rating_pct %>%
         panel.grid.major = element_blank())
 ```
 
-Observations:
-
-- Fairly good fits overall
-- MLE fit under-estimates the spread of the 5-star ratings (blue density is narrower than the empirical histogram)
+The MLE fit tracks closely to the empirical distribution, so the overall fit is pretty good. One area where the fit isn't great is the distribution of 5-star ratings: our MLE fit has under-estimated the variance. You can tell this by the MLE blue curve being narrower and taller than the empirical distribution. Even though it's not perfect, I'm making the call that it's good enough to use for our shrinkage purposes.  
+\  
 
 
+### Incorporating the prior into ratings
+
+We can finally calculate the shrunk ratings. We just need need to add the prior "starter ratings" to each books existing real ratings.
 
 ```{r calculate-empirical-bayes-rating, message = FALSE}
 # Calculate empirical Bayes rating using our prior
@@ -296,23 +302,40 @@ books_eb <- books %>%
                values_to = "ratings") %>%
   left_join(par, by = "rating_stars") %>%
   group_by(isbn, title, author, rating_count) %>%
+  # Calculate original rating from scratch because rating field truncates after two decimal places
   summarise(rating_calc = sum(rating_stars * ratings) / sum(ratings),
             rating_eb = sum(rating_stars * (ratings + prior_ratings)) / sum(ratings + prior_ratings)) %>%
   ungroup()
 ```
 
+And we end up with an adjusted rating for each book (`rating_eb`). Here are the top 10 books, according to our empirical Bayes estimate:
+
+```{r example-shrunk-ratings}
+books_eb %>%
+  top_n(10, wt = rating_eb) %>%
+  arrange(desc(rating_eb)) %>%
+  kable(format = "html") %>%
+  kable_styling()
+```
+
+Immediately, I'm more confident in these ratings than the originals, which had a bunch of books with 2 or 3 ratings that just happened to be 5 stars. However, even though we've addressed the issue of books with few ratings potentially having extreme overall ratings, we still need to be careful when interpreting our adjusted rating.
+
+The top-rated book is *100 Fun Bible Facts* by Ginger Baum. I'm sure it's an excellent book, but not everyone might consider it excellent. People who took the time to read and rate this book are likely pre-disposed to enjoy books with biblical themes, making this a likely illustration of [self-selection bias](https://en.wikipedia.org/wiki/Self-selection_bias).  
+\  
+
+
 
 ### Animations
 
-```{r books-shrunk-data, message = FALSE}
+
+```{r animation-shrinkage, fig.align = 'center', fig.width = 8, fig.asp = 0.7}
+# Format data properly for animation
 books_shrunk <- books_eb %>%
   filter(rating_count > 0) %>%
   select(isbn:author, rating_count, rating_calc, rating_eb) %>%
   pivot_longer(rating_calc:rating_eb, names_to = "rating_type", values_to = "rating") %>%
   mutate(rating_type = ifelse(rating_type == "rating_calc", "Original Rating", "Empirical Bayes Rating"))
-```
 
-```{r animation-200-ratings-or-less, fig.align = 'center', fig.width = 8, fig.asp = 0.7}
 # Create base plot
 p <- books_shrunk %>%
   filter(rating_count <= 200) %>%
@@ -345,7 +368,14 @@ anim <- p +
 
 # Create animation
 anim
-```
+```  
+\  
+
+
+
+## Conclusion
+
+We've successfully used empirical Bayes estimation to get more realistic ratings for our 9,000 children's books! If you'd like to see the full dataset of adjusted ratings, feel free to download it here.  
 
 
 
