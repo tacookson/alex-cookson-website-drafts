@@ -3,35 +3,46 @@ title: "Normalizing star ratings of children's books"
 author: "Alex Cookson"
 date: "12/06/2020"
 output: html_document
----
-
-### To-do List
-
-- Split `normalize-and-rescale` chunk into separate chunks: one for rescaling, another for normalizing
+---  
+\  
 
 
-## Introduction
-
-In a two-post series, I will "fix" some of these ratings problems:
-
-1. Address items with few ratings by using **empirical Bayes estimation** to estimate more reasonable ratings (this post)
-1. **Normalizing and re-scaling** ratings so that they are easier to interpret (and look more like that nice, symmetrical normal curve pictured above) (*coming soon*)
+*Note: this is the second part of a two-post series where I "fix" some of the problems with crowd-sourced ratings, like those you find for movies or books. (In this series, I look at children's books.) In [the first part](https://www.alexcookson.com/post/rating-childrens-books-with-empirical-bayes-estimation/), I incorporated a Bayesian prior into the rating calculation to address books with very few ratings sometimes having extreme scores (like 5 out of 5 stars) that likely don't reflect their actual quality.*  
+\  
 
 
-Two pieces:
+In part two of this two-part series, we will **normalize and rescale** children's books ratings to them easier to interpret. To do this, we need to force our empirical distribution into a normal distribution. We will end up with something like this (just replace "movies" with "books"):
 
-1. Rescale so that we use the full size of distribution
-1. Normalize so that ratings have a nice round mean and equal proportion of books above and below the mean (mean == median)
+
+#### picture of normal distribution
+
+
+**Why normalize ratings at all?** Normal distributions have some properties that make them easy to interpret. First, the normal distribution has the same mean, median, and mode, three common [measures of central tendency](https://en.wikipedia.org/wiki/Central_tendency). This gives us a strong "typical rating" which we set in the middle of our range: 3 stars. So a perfectly average book will have a rating of exactly 3 stars. Plus, there will be an equal proportion of books above and below 3 stars.
+
+Second, the normal distribution has nice [dispersion](https://en.wikipedia.org/wiki/Statistical_dispersion): most books will be close to average, but we will have a few extremely bad or extremely good books that are close to 1 or 5 stars, respectively. This fits with the intuition of having extremely good or bad books being fairly rare.  
+\  
+
+
+However, normalization is a judgement call. There are good arguments *against* normalizing ratings. One argument is that normalization forces ratings into how we *think* they should be distributed instead of how they actually *are* distributed. So by normalizing, we're shifting and tweaking ratings in a way that makes them less accurate.
+
+Another argument is that the issues with ratings that we outlined in the first post are so common that people have already adjusted their mental models of ratings to take them into account. For example, on a 1-5 star scale, we would already expect an "average" books to be around 4 stars even though the middle of range is technically 3 stars; a 4-star average isn't misleading because it's expected. Under this argument, we're messing with that existing mental model by aligning the average rating with the middle of the scale. We're actually making ratings *harder* for people to interpret.  
+\  
+
+
+I think the arguments for normalization are more compelling for the arguments against, so I'm comfortable making the call to do it. Just know that it shouldn't be an automatic decision -- you should consider whether it's appropriate to the specific problem you want to solve.  
+\  
+
 
 
 ## Setup
 
-First, we'll load our packages and import the data. We're going to use a dataset set of about 9,000 children's books that have been rated from 1-5 stars. In terms of packages, in addition to the `tidyverse`, we'll use:
+Let's start putting these concepts into action. We'll load our packages and import our data. In addition to the `tidyverse`, we'll use:
 
 - `bestNormalize` for normalization functions
-- `scales` for useful re-scaling functions
+- `scales` for useful rescaling functions
 - `extrafont` to make our graphs look nice
 - `gganimate` to visualize what exactly empirical Bayes estimation does to the ratings
+- `knitr` and `kableExtra` to get nicely-formatted tables for this post (not necessary if you're just doing this in RStudio)
 
 ```{r setup-and-import, warnings = FALSE, message = FALSE}
 library(tidyverse)
@@ -39,35 +50,67 @@ library(bestNormalize)
 library(scales)
 library(extrafont)
 library(gganimate)
+library(knitr)
+library(kableExtra)
 
 theme_set(theme_light())
 
-books_eb <- read_tsv("https://raw.githubusercontent.com/tacookson/data/master/childrens-book-ratings/childrens-books-empirical-bayes-ratings.txt")
-```
+# Data is the output of part one of this series
+books_eb <- read_tsv("https://raw.githubusercontent.com/tacookson/data/master/childrens-book-ratings/childrens-books-empirical-bayes-ratings.txt") %>%
+  select(-rating_count, -rating_calc)
+```  
+\  
+
+
 
 ## Starting point
+
+As a reminder, here is what our data looks like. We have some essential information about the book, like ISBN and title, and the empirical Bayes rating we calculated in the first post. (I'm going to call this the "Original" rating because we reference this rating a lot and it's a bit cumbersome to write "Empirical Bayes rating" every time.)
+
+```{r example-data}
+# For reproducability
+set.seed(24601)
+
+books_eb %>%
+  sample_n(6) %>%
+  kable(format = "html") %>%
+  kable_styling()
+```  
+\  
+
+
+Ratings don't have extreme values anymore, but the distribution is still tight and uses less than half of the full 1-5 star range. There are literally *no* books with a rating less than 3 stars, so we effectively have a 3-5 star range instead:
 
 ```{r eb-rating-distribution, fig.align = 'center', fig.width = 8, fig.asp = 0.7}
 books_eb %>%
   ggplot(aes(rating_eb)) +
   geom_histogram(binwidth = 0.1, fill = "#461220", alpha = 0.8) +
+  scale_y_continuous(labels = label_comma()) +
   expand_limits(x = 1) +
-  labs(title = "Title",
-       subtitle = "Subtitle",
-       x = "Star rating",
+  labs(title = "Most of the 1-5 star range is unused",
+       subtitle = "Ratings are concentrated around 4 stars, without much variance",
+       x = "Original rating",
        y = "Number of books") +
   theme(text = element_text(family = "Bahnschrift"),
         plot.title = element_text(size = 18),
         axis.text = element_text(size = 16))
 ```
 
-## Rescaling
+That's not very intuitive. If someone told me a book had a 3/5 star rating, I would intuitively think, "It sounds like an okay, but not great, book". Under *this* distribution, a 3/5 star rating would make that book the **worst one of over 9,000!**
+
+
+
+## Why do we have to normalize (as opposed to just rescale)?
 
 ```{r rescale}
 scaled <- books_eb %>%
   mutate(scaled_eb = rescale(rating_eb, to = c(1, 5)))
 ```
 
+Description of what rescaling is actually doing:
+
+- "Stretching" the measure to fit our desired range (4 = 5 - 1)
+- "Shifting" the measure so that it actually fits on the 1-5 scale
 
 ```{r animation-rescaling, fig.align = 'center', fig.width = 4, fig.asp = 0.7}
 # Get data in format to be animated
@@ -82,12 +125,12 @@ scaled_anim <- scaled %>%
 p_rescaling <- scaled_anim %>%
   ggplot(aes(rating)) +
   geom_histogram(binwidth = 0.1, fill = "#778DA9", alpha = 0.8) +
-  labs(subtitle = "Rescaling widens the distribution: bad ratings get worse and good ratings get better",
+  labs(subtitle = "Rescaling \"stretches\" the distribution to fill the wider range",
        x = "Mean-centred star rating",
        y = "Number of books") +
-  theme(text = element_text(family = "Bahnschrift"),
-        plot.title = element_text(size = 18),
-        axis.text = element_text(size = 16),
+  theme(text = element_text(family = "Bahnschrift", size = 6),
+        plot.title = element_text(size = 9),
+        axis.text = element_text(size = 7),
         panel.grid.minor.y = element_blank())
 
 # Set animation parameters
@@ -111,8 +154,8 @@ scaled %>%
   geom_histogram(binwidth = 0.1, fill = "#461220", alpha = 0.8) +
   geom_vline(xintercept = rescaled_mean, lty = 2, size = 1.5, col = "grey90") +
   expand_limits(x = 1) +
-  labs(title = "Rescaled distribution is pretty good, but still skewed",
-       subtitle = "Mean is still a non-round number -- ~ 3.2ish",
+  labs(title = "Rescaled distribution is still skewed",
+       subtitle = "Mean is still not centred at 3 stars",
        x = "Rescaled star rating",
        y = "Number of books") +
   theme(text = element_text(family = "Bahnschrift"),
@@ -126,18 +169,19 @@ scaled %>%
 Force it into a normal distribution using ordered quantile normalization, then re-scale from 1 to 5:
 
 - Rankings are preserved (so the top-rated book will remain the top-rated book and the book with, say, the 455th-highest rating stays as the 455th-highest rated book)
-- Score changes to fit a normal distribution (why is normal distribution desirable? It is symmetrical and it concentrates books around the mean, so most books are around average, but you get a few exceptionally good and exceptionally bad books)
+- Score changes to fit a standard normal distribution (why is normal distribution desirable? It is symmetrical and it concentrates books around the mean, so most books are around average, but you get a few exceptionally good and exceptionally bad books)
 
-```{r normalize-and-rescale}
+```{r normalize}
 # Use orderNorm() from {bestNormalize} package for ordered quantile normalization
 orq_model <- orderNorm(books_eb$rating_eb, warn = FALSE)
 
 # Create tibble with normalized fitted values
-normalized <- tibble(rating_norm = predict(orq_model, newdata = books_eb$rating_eb))
+normalized <- tibble(rating_norm = predict(orq_model,
+                                           newdata = books_eb$rating_eb)) %>%
+  transmute(scaled_norm = rescale(rating_norm, to = c(1, 5)))
 
-# Add normalized rating to original data and rescale to be 1-5
-scaled_norm <- bind_cols(scaled, normalized) %>%
-  mutate(scaled_norm = rescale(rating_norm, to = c(1, 5)))
+# Add normalized ratings as a field to our data 
+scaled_norm <- bind_cols(scaled, normalized)
 ```
 
 
@@ -146,18 +190,18 @@ scaled_norm <- bind_cols(scaled, normalized) %>%
 scaled_anim <- scaled_norm %>%
   select(isbn, scaled_eb, scaled_norm) %>%
   pivot_longer(-isbn, names_to = "scale", values_to = "rating") %>%
-  mutate(scale = ifelse(scale == "scaled_eb", "Non-Normalized Rating", "Normalized Rating"))
+  mutate(scale = ifelse(scale == "scaled_eb", "Rescaled", "Rescaled + Normalized"))
 
 # Create base plot
 p_normalizing <- scaled_anim %>%
   ggplot(aes(rating)) +
   geom_histogram(binwidth = 0.1, fill = "#778DA9", alpha = 0.8) +
-  labs(subtitle = "Normalization squeezes some higher ratings down, filling out the left of the distribution",
+  labs(subtitle = "Normalization \"squeezes\" ratings to fill out the low end of the distribution",
        x = "Scaled star rating",
        y = "Number of books") +
-  theme(text = element_text(family = "Bahnschrift"),
-        plot.title = element_text(size = 18),
-        axis.text = element_text(size = 16),
+  theme(text = element_text(family = "Bahnschrift", size = 6),
+        plot.title = element_text(size = 9),
+        axis.text = element_text(size = 7),
         panel.grid.minor.y = element_blank())
 
 # Set animation parameters
@@ -189,9 +233,9 @@ p_test <- test_anim %>%
   labs(subtitle = "",
        x = "Scaled star rating",
        y = "Number of books") +
-  theme(text = element_text(family = "Bahnschrift"),
-        plot.title = element_text(size = 18),
-        axis.text = element_text(size = 16),
+  theme(text = element_text(family = "Bahnschrift", size = 6),
+        plot.title = element_text(size = 9),
+        axis.text = element_text(size = 7),
         panel.grid.minor.y = element_blank())
 
 # Set animation parameters
@@ -205,6 +249,7 @@ anim_test <- p_test +
 
 # Create animation
 animate(anim_test,
+        start_pause = 5,
         end_pause = 10)
 ```
 
