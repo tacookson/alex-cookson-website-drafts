@@ -63,23 +63,21 @@ books_eb <- read_tsv("https://raw.githubusercontent.com/tacookson/data/master/ch
 
 
 
-## Starting point
+## "Original" empirical Bayes ratings
 
-As a reminder, here is what our data looks like. We have some essential information about the book, like ISBN and title, and the empirical Bayes rating we calculated in the first post. (I'm going to call this the "Original" rating because we reference this rating a lot and it's a bit cumbersome to write "Empirical Bayes rating" every time.)
+As a reminder, here is what our data looks like. We have some essential information about the book, like ISBN and title, and the empirical Bayes rating we calculated in the first post. (I'm going to call this the "Original" rating because we reference it a lot and it's a bit cumbersome to write "Empirical Bayes rating" every time.)
 
 ```{r example-data}
 # For reproducability
 set.seed(24601)
 
 books_eb %>%
-  sample_n(6) %>%
+  sample_n(4) %>%
   kable(format = "html") %>%
   kable_styling()
-```  
-\  
+```
 
-
-Ratings don't have extreme values anymore, but the distribution is still tight and uses less than half of the full 1-5 star range. There are literally *no* books with a rating less than 3 stars, so we effectively have a 3-5 star range instead:
+Ratings don't have extreme values anymore, but the distribution is still tight and uses less than half of the full 1-5 star range. There are literally *no* books with a rating less than 3 stars, so, in practice, it is a 3-5 star range:
 
 ```{r eb-rating-distribution, fig.align = 'center', fig.width = 8, fig.asp = 0.7}
 books_eb %>%
@@ -96,15 +94,22 @@ books_eb %>%
         axis.text = element_text(size = 16))
 ```
 
-That's not very intuitive. If someone told me a book had a 3/5 star rating, I would intuitively think, "It sounds like an okay, but not great, book". Under *this* distribution, a 3/5 star rating would make that book the **worst one of over 9,000!**
+That's not very intuitive. If someone told me a book had a 3/5 star rating, I would think, "It sounds like an okay, but not great, book". Under *this* distribution, a 3/5 star rating would make that book the **worst one of over 9,000!**
 
 
 
-## Why do we have to normalize (as opposed to just rescale)?
+## Why can't we just rescale?
+
+Before we jump into normalization, it's worth looking at what happens if we **only rescale**, without normalizing. After all, our big issue is that we're not using the full range. Can't we extend our ratings to fit that range and not worry about messing about with normal distributions?
+
+Yes, we can. The `scales` package's `rescale()` function let's us specify a desired range to scale to. 
+
+(If you're curious about the specific calculation, take a look at this [StackOverflow thread](https://stackoverflow.com/questions/5294955/how-to-scale-down-a-range-of-numbers-with-a-known-min-and-max-value).)
 
 ```{r rescale}
 scaled <- books_eb %>%
-  mutate(scaled_eb = rescale(rating_eb, to = c(1, 5)))
+  mutate(scaled_eb = rescale(rating_eb, to = c(1, 5)),
+         scaled_manual = (5-1)*(rating_eb-min(rating_eb))/(max(rating_eb)-min(rating_eb)) + 1)
 ```
 
 Description of what rescaling is actually doing:
@@ -148,12 +153,17 @@ anim_rescaling
 ```{r rescaled-rating-distribution, fig.align = 'center', fig.width = 8, fig.asp = 0.7}
 rescaled_mean <- mean(scaled$scaled_eb)
 
-## TO DO: Add annotation of where the mean rating is
 scaled %>%
   ggplot(aes(scaled_eb)) +
   geom_histogram(binwidth = 0.1, fill = "#461220", alpha = 0.8) +
-  geom_vline(xintercept = rescaled_mean, lty = 2, size = 1.5, col = "grey90") +
+  geom_vline(xintercept = rescaled_mean, lty = 2, size = 1.5, col = "white") +
   expand_limits(x = 1) +
+  annotate("text", x = 3.12, y = 60,
+           label = paste0("Mean rating = ", number(rescaled_mean, accuracy = 0.01)),
+           family = "Bahnschrift",
+           colour = "white",
+           size = 4.5,
+           hjust = 1) +
   labs(title = "Rescaled distribution is still skewed",
        subtitle = "Mean is still not centred at 3 stars",
        x = "Rescaled star rating",
