@@ -63,14 +63,20 @@ books_eb %>%
 
 ## Rescaling
 
-```{r animation-rescaling, fig.align = 'center', fig.width = 8, fig.asp = 0.7}
+```{r rescale}
+scaled <- books_eb %>%
+  mutate(scaled_eb = rescale(rating_eb, to = c(1, 5)))
+```
+
+
+```{r animation-rescaling, fig.align = 'center', fig.width = 4, fig.asp = 0.7}
 # Get data in format to be animated
 scaled_anim <- scaled %>%
   select(isbn, rating_eb, scaled_eb) %>%
   mutate(rating_eb_mean_centred = rating_eb - mean(rating_eb),
          scaled_eb_mean_centred = scaled_eb - mean(scaled_eb)) %>%
   pivot_longer(rating_eb_mean_centred:scaled_eb_mean_centred, names_to = "scale", values_to = "rating") %>%
-  mutate(scale = ifelse(scale == "rating_eb_mean_centred", "Non-Rescaled Rating", "Rescaled Rating"))
+  mutate(scale = ifelse(scale == "rating_eb_mean_centred", "Original", "Rescaled"))
 
 # Create base plot
 p_rescaling <- scaled_anim %>%
@@ -98,7 +104,6 @@ anim_rescaling
 
 ```{r rescaled-rating-distribution, fig.align = 'center', fig.width = 8, fig.asp = 0.7}
 rescaled_mean <- mean(scaled$scaled_eb)
-
 
 ## TO DO: Add annotation of where the mean rating is
 scaled %>%
@@ -131,15 +136,14 @@ orq_model <- orderNorm(books_eb$rating_eb, warn = FALSE)
 normalized <- tibble(rating_norm = predict(orq_model, newdata = books_eb$rating_eb))
 
 # Add normalized rating to original data and rescale to be 1-5
-scaled <- bind_cols(books_eb, normalized) %>%
-  mutate(scaled_eb = rescale(rating_eb, to = c(1, 5)),
-         scaled_norm = rescale(rating_norm, to = c(1, 5)))
+scaled_norm <- bind_cols(scaled, normalized) %>%
+  mutate(scaled_norm = rescale(rating_norm, to = c(1, 5)))
 ```
 
 
-```{r animation-normalizing, fig.align = 'center', fig.width = 8, fig.asp = 0.7}
+```{r animation-normalizing, fig.align = 'center', fig.width = 4, fig.asp = 0.7}
 # Get data in format to be animated
-scaled_anim <- scaled %>%
+scaled_anim <- scaled_norm %>%
   select(isbn, scaled_eb, scaled_norm) %>%
   pivot_longer(-isbn, names_to = "scale", values_to = "rating") %>%
   mutate(scale = ifelse(scale == "scaled_eb", "Non-Normalized Rating", "Normalized Rating"))
@@ -169,3 +173,38 @@ anim_normalizing
 ```
 
 Explanation of how normalizing is a judgement call and that even though we change some of the rating data, we benefit from increased interpretability (mean rating of 3 and equal proportion of books above and below that).
+
+```{r animation-full-sequence, fig.align = 'center', fig.width = 4, fig.asp = 0.7}
+test_anim <- scaled_norm %>%
+  select(isbn, rating_eb, scaled_eb, scaled_norm) %>%
+  pivot_longer(-isbn, names_to = "scale", values_to = "rating") %>%
+  mutate(scale = case_when(scale == "rating_eb" ~ "Original",
+                           scale == "scaled_eb" ~ "Rescaled",
+                           TRUE ~ "Rescaled + Normalized"))
+
+# Create base plot
+p_test <- test_anim %>%
+  ggplot(aes(rating)) +
+  geom_histogram(binwidth = 0.1, fill = "#778DA9", alpha = 0.8) +
+  labs(subtitle = "",
+       x = "Scaled star rating",
+       y = "Number of books") +
+  theme(text = element_text(family = "Bahnschrift"),
+        plot.title = element_text(size = 18),
+        axis.text = element_text(size = 16),
+        panel.grid.minor.y = element_blank())
+
+# Set animation parameters
+anim_test <- p_test +
+  transition_states(scale,
+                    transition_length = 1.5,
+                    state_length = 1.5,
+                    wrap = FALSE) +
+  shadow_mark(past = TRUE, future = FALSE, alpha = 0.2) +
+  ggtitle("{previous_state}")
+
+# Create animation
+animate(anim_test,
+        end_pause = 10)
+```
+
