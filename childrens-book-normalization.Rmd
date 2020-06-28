@@ -102,20 +102,24 @@ That's not very intuitive. If someone told me a book had a 3/5 star rating, I wo
 
 Before we jump into normalization, it's worth looking at what happens if we **only rescale**, without normalizing. After all, our big issue is that we're not using the full range. Can't we extend our ratings to fit that range and not worry about messing about with normal distributions?
 
-Yes, we can. The `scales` package's `rescale()` function let's us specify a desired range to scale to. 
+Yes, we can.
 
-(If you're curious about the specific calculation, take a look at this [StackOverflow thread](https://stackoverflow.com/questions/5294955/how-to-scale-down-a-range-of-numbers-with-a-known-min-and-max-value).)
+Think of rescaling as a two-step process:
+
+1. "Squeezing" or "stretching" the data to fit our target range
+1. Shifting the data up or down to fit our target minimum and maximum
+
+Our original ratings have a minimum of `r number(min(books_eb$rating_eb), accuracy = 0.01)` and a maximum of `r number(max(books_eb$rating_eb), accuracy = 0.01)`, which means a range of `r number(max(books_eb$rating_eb) - min(books_eb$rating_eb), accuracy = 0.01)`. Our target distribution has a minimum of 1 and a maximum of 5, meaning a range of 4. So rescaling "stretches" the narrow (original) range to the wide (target) range, then shifts that stretched data so that it has a minimum of 1 and a maximum of 5.
+
+Fortunately, the `scales` package's `rescale()` function takes care of the heavy lifting for us. (But if you're curious about the specific calculation, look at this [StackOverflow thread](https://stackoverflow.com/questions/5294955/how-to-scale-down-a-range-of-numbers-with-a-known-min-and-max-value).))
 
 ```{r rescale}
 scaled <- books_eb %>%
-  mutate(scaled_eb = rescale(rating_eb, to = c(1, 5)),
-         scaled_manual = (5-1)*(rating_eb-min(rating_eb))/(max(rating_eb)-min(rating_eb)) + 1)
+  # Use the to argument to set target min and max (range is implicit)
+  mutate(scaled_eb = rescale(rating_eb, to = c(1, 5)))
 ```
 
-Description of what rescaling is actually doing:
-
-- "Stretching" the measure to fit our desired range (4 = 5 - 1)
-- "Shifting" the measure so that it actually fits on the 1-5 scale
+We can also visualize the "stretching" step of rescaling by looking at the *mean-centred* values of the original and rescaled data. (We use mean-centred values to get rid of the effects of the "shifting" step.)
 
 ```{r animation-rescaling, fig.align = 'center', fig.width = 4, fig.asp = 0.7}
 # Get data in format to be animated
@@ -130,7 +134,7 @@ scaled_anim <- scaled %>%
 p_rescaling <- scaled_anim %>%
   ggplot(aes(rating)) +
   geom_histogram(binwidth = 0.1, fill = "#778DA9", alpha = 0.8) +
-  labs(subtitle = "Rescaling \"stretches\" the distribution to fill the wider range",
+  labs(subtitle = "Rescaling \"stretches\" ratings to fill the wider range",
        x = "Mean-centred star rating",
        y = "Number of books") +
   theme(text = element_text(family = "Bahnschrift", size = 6),
@@ -149,6 +153,9 @@ anim_rescaling <- p_rescaling +
 # Create animation
 anim_rescaling
 ```
+
+
+Looking at the rescaled distribution: close, but not quite there.
 
 ```{r rescaled-rating-distribution, fig.align = 'center', fig.width = 8, fig.asp = 0.7}
 rescaled_mean <- mean(scaled$scaled_eb)
