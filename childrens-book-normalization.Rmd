@@ -63,7 +63,7 @@ books_eb <- read_tsv("https://raw.githubusercontent.com/tacookson/data/master/ch
 
 
 
-## "Original" empirical Bayes ratings
+## What's wrong with the original ratings?
 
 As a reminder, here is what our data looks like. We have some essential information about the book, like ISBN and title, and the empirical Bayes rating we calculated in the first post. (I'm going to call this the "Original" rating because we reference it a lot and it's a bit cumbersome to write "Empirical Bayes rating" every time.)
 
@@ -94,32 +94,35 @@ books_eb %>%
         axis.text = element_text(size = 16))
 ```
 
-That's not very intuitive. If someone told me a book had a 3/5 star rating, I would think, "It sounds like an okay, but not great, book". Under *this* distribution, a 3/5 star rating would make that book the **worst one of over 9,000!**
+That's not very intuitive. If someone told me a book had a 3/5 star rating, I would think, "It sounds like an okay, but not great, book". Under *this* distribution, a 3/5 star rating would make that book the **worst one of over 9,000!**  
+\  
 
 
 
 ## Why can't we just rescale?
 
-Before we jump into normalization, it's worth looking at what happens if we **only rescale**, without normalizing. After all, our big issue is that we're not using the full range. Can't we extend our ratings to fit that range and not worry about messing about with normal distributions?
+Before we jump into normalization, it's worth looking at what happens if we **only rescale** to use the full 1-5 scale, without normalizing. After all, our big issue is that we're not using the full range. Can't we extend our ratings to fit that range and not worry about messing around with normal distributions?
 
 Yes, we can.
 
 Think of rescaling as a two-step process:
 
-1. "Squeezing" or "stretching" the data to fit our target range
-1. Shifting the data up or down to fit our target minimum and maximum
+1. "Squeezing" or "stretching" the data to fit our target range ("squeeze" to make the range smaller; "stretch" to make the range larger)
+1. "Shifting" the data up or down to fit our target minimum and maximum
 
-Our original ratings have a minimum of `r number(min(books_eb$rating_eb), accuracy = 0.01)` and a maximum of `r number(max(books_eb$rating_eb), accuracy = 0.01)`, which means a range of `r number(max(books_eb$rating_eb) - min(books_eb$rating_eb), accuracy = 0.01)`. Our target distribution has a minimum of 1 and a maximum of 5, meaning a range of 4. So rescaling "stretches" the narrow (original) range to the wide (target) range, then shifts that stretched data so that it has a minimum of 1 and a maximum of 5.
+Our original ratings have a minimum of `r number(min(books_eb$rating_eb), accuracy = 0.01)` and a maximum of `r number(max(books_eb$rating_eb), accuracy = 0.01)`, which means a range of `r number(max(books_eb$rating_eb) - min(books_eb$rating_eb), accuracy = 0.01)`. Our target distribution has a minimum of 1 and a maximum of 5, meaning a range of 4. So rescaling stretches the narrow (original) range to the wide (target) range, then shifts that stretched data so that it has a minimum of 1 and a maximum of 5.
 
-Fortunately, the `scales` package's `rescale()` function takes care of the heavy lifting for us. (But if you're curious about the specific calculation, look at this [StackOverflow thread](https://stackoverflow.com/questions/5294955/how-to-scale-down-a-range-of-numbers-with-a-known-min-and-max-value).))
+Fortunately, the `scales` package's `rescale()` function takes care of the heavy lifting for us. (But if you're curious about the specific calculation, look at this [StackOverflow thread](https://stackoverflow.com/questions/5294955/how-to-scale-down-a-range-of-numbers-with-a-known-min-and-max-value).)
 
 ```{r rescale}
 scaled <- books_eb %>%
-  # Use the to argument to set target min and max (range is implicit)
+  # Use the "to" argument to set target min and max (range is implicit)
   mutate(scaled_eb = rescale(rating_eb, to = c(1, 5)))
-```
+```  
+\  
 
-We can also visualize the "stretching" step of rescaling by looking at the *mean-centred* values of the original and rescaled data. (We use mean-centred values to get rid of the effects of the "shifting" step.)
+
+We can also visualize the stretching step of rescaling by looking at the *mean-centred* values of the original vs. the rescaled data. Mean-centred values get rid of the effects of the shifting step, which we won't go into detail on since it is more straightforward.
 
 ```{r animation-rescaling, fig.align = 'center', fig.width = 4, fig.asp = 0.7}
 # Get data in format to be animated
@@ -134,6 +137,7 @@ scaled_anim <- scaled %>%
 p_rescaling <- scaled_anim %>%
   ggplot(aes(rating)) +
   geom_histogram(binwidth = 0.1, fill = "#778DA9", alpha = 0.8) +
+  scale_y_continuous(labels = label_comma()) +
   labs(subtitle = "Rescaling \"stretches\" ratings to fill the wider range",
        x = "Mean-centred star rating",
        y = "Number of books") +
@@ -152,12 +156,14 @@ anim_rescaling <- p_rescaling +
 
 # Create animation
 anim_rescaling
-```
+```  
+\  
 
 
-Looking at the rescaled distribution: close, but not quite there.
+And here's the completely rescaled data:
 
 ```{r rescaled-rating-distribution, fig.align = 'center', fig.width = 8, fig.asp = 0.7}
+# Calculate rescaled mean to add a reference line
 rescaled_mean <- mean(scaled$scaled_eb)
 
 scaled %>%
@@ -171,7 +177,7 @@ scaled %>%
            colour = "white",
            size = 4.5,
            hjust = 1) +
-  labs(title = "Rescaled distribution is still skewed",
+  labs(title = "Rescaled data is still skewed",
        subtitle = "Mean is still not centred at 3 stars",
        x = "Rescaled star rating",
        y = "Number of books") +
@@ -180,27 +186,39 @@ scaled %>%
         axis.text = element_text(size = 16))
 ```
 
+It looks pretty good! We're using the full range, meaning it's easier to discriminate between good and bad books (according to the ratings, at least). We could easily stop here and be happy with our result, but I'm *really* keen to have 3 stars be the exact middle of the distribution. On to normalization!  
+\  
 
-## Normalizing
 
-Force it into a normal distribution using ordered quantile normalization, then re-scale from 1 to 5:
 
-- Rankings are preserved (so the top-rated book will remain the top-rated book and the book with, say, the 455th-highest rating stays as the 455th-highest rated book)
-- Score changes to fit a standard normal distribution (why is normal distribution desirable? It is symmetrical and it concentrates books around the mean, so most books are around average, but you get a few exceptionally good and exceptionally bad books)
+## Normalizing the ratings
+
+As discussed in the introduction, the normal distribution has strong, centred "typical rating" and symmetrical dispersion. But how do we actually convert the original distribution to a normal distribution?
+
+With **ordered quantile normalization**, that's how! It sounds scary, but it's not too bad. We take our original ratings, put them in order, then rank them from lowest to highest. Then, we create a new set of values that is normally-distributed and has the same number of data points. (In our case, `r comma(nrow(books_eb))` book ratings = `r comma(nrow(books_eb))` normally-distributed values.) We put *them* in order then rank them.
+
+Now we have two sets of ranks: our original ratings and some normally-distributed values. We use rank to match up our original ratings with the normally-distributed values. So the book with the 452nd-highest rating in the original data will match with the 452nd-highest value in the normally-distributed data. Whatever value we matched up to in the normally-distributed values is that book's new rating. Easy! (But if you like, Josh Starmer explains it more thoroughly in this [StatQuest video](https://www.youtube.com/watch?v=ecjN6Xpv6SE).)
+
+That's the concept. Now let's talk implementation. We are going to use the `orderNorm()` function from Ryan Peterson's [`bestNormalize`](https://cran.r-project.org/web/packages/bestNormalize/vignettes/bestNormalize.html#the-ordered-quantile-technique) package. Like `rescale()`, it takes care of the heavy lifting for us. Here's the plan:
+
+1. Create an ordered quantile regression model using our original ratings with `orderNorm()`
+1. Get the normalized values from the model using `predict()`
+1. `rescale()` those normalized values to our desired range of 1-5 stars (the normalized values from (2) use a standard normal distribution, which is centred at zero)
+1. Add the normalized, rescaled ratings to our original dataset with `bind_cols()`
 
 ```{r normalize}
 # Use orderNorm() from {bestNormalize} package for ordered quantile normalization
-orq_model <- orderNorm(books_eb$rating_eb, warn = FALSE)
+ordered_quantile_model <- orderNorm(books_eb$rating_eb, warn = FALSE)
 
-# Create tibble with normalized fitted values
-normalized <- tibble(rating_norm = predict(orq_model,
-                                           newdata = books_eb$rating_eb)) %>%
+# Create tibble with normalized fitted values, then rescale those values to 1-5 range
+normalized <- tibble(rating_norm = predict(ordered_quantile_model)) %>%
   transmute(scaled_norm = rescale(rating_norm, to = c(1, 5)))
 
 # Add normalized ratings as a field to our data 
 scaled_norm <- bind_cols(scaled, normalized)
 ```
 
+Now we have normalized ratings! They're pretty close to the *rescale-only* ratings. But we've massaged them just a bit to get them to fit a normal curve:
 
 ```{r animation-normalizing, fig.align = 'center', fig.width = 4, fig.asp = 0.7}
 # Get data in format to be animated
@@ -231,42 +249,42 @@ anim_normalizing <- p_normalizing +
 
 # Create animation
 anim_normalizing
-```
+```  
+\  
 
-Explanation of how normalizing is a judgement call and that even though we change some of the rating data, we benefit from increased interpretability (mean rating of 3 and equal proportion of books above and below that).
 
-```{r animation-full-sequence, fig.align = 'center', fig.width = 4, fig.asp = 0.7}
-test_anim <- scaled_norm %>%
-  select(isbn, rating_eb, scaled_eb, scaled_norm) %>%
-  pivot_longer(-isbn, names_to = "scale", values_to = "rating") %>%
-  mutate(scale = case_when(scale == "rating_eb" ~ "Original",
-                           scale == "scaled_eb" ~ "Rescaled",
-                           TRUE ~ "Rescaled + Normalized"))
+And now we reap the benefits of our hard work! Here is a random selection *Terrible* to *Great* books according to our normalized ratings:
 
-# Create base plot
-p_test <- test_anim %>%
-  ggplot(aes(rating)) +
-  geom_histogram(binwidth = 0.1, fill = "#778DA9", alpha = 0.8) +
-  labs(subtitle = "",
-       x = "Scaled star rating",
-       y = "Number of books") +
-  theme(text = element_text(family = "Bahnschrift", size = 6),
-        plot.title = element_text(size = 9),
-        axis.text = element_text(size = 7),
-        panel.grid.minor.y = element_blank())
+```{r}
+# For reproducability
+set.seed(25624)
 
-# Set animation parameters
-anim_test <- p_test +
-  transition_states(scale,
-                    transition_length = 1.5,
-                    state_length = 1.5,
-                    wrap = FALSE) +
-  shadow_mark(past = TRUE, future = FALSE, alpha = 0.2) +
-  ggtitle("{previous_state}")
+scaled_norm %>%
+  mutate(quality = case_when(scaled_norm < 1.5 ~ "Terrible",
+                             scaled_norm < 2 ~ "Bad",
+                             scaled_norm < 3 ~ "Below Average",
+                             scaled_norm < 4 ~ "Above Average",
+                             scaled_norm < 4.5 ~ "Good",
+                             TRUE ~ "Great")) %>%
+  group_by(quality) %>%
+  sample_n(1) %>%
+  ungroup() %>%
+  arrange(scaled_norm) %>%
+  transmute(Quality = quality,
+            Book = title,
+            Author = author,
+            Rating = number(scaled_norm, accuracy = 0.01)) %>%
+  kable(format = "html") %>%
+  kable_styling()
+```  
+\  
 
-# Create animation
-animate(anim_test,
-        start_pause = 5,
-        end_pause = 10)
-```
 
+
+## Conclusion
+
+In the [first post](https://www.alexcookson.com/post/rating-childrens-books-with-empirical-bayes-estimation/) of this series, we incorporated a Bayesian prior into our children's book ratings. In this post, we normalized the ratings to use the full 1-5 star scale and follow a normal curve This made for a nice distribution of ratings, with values that are easy to interpret.
+
+If you'd like to explore or download the full dataset of normalized ratings, you can do so [here](https://github.com/tacookson/data/tree/master/childrens-book-ratings).
+
+In the meantime, why not check out some great children's books? I hear *Homicidal Psycho Jungle Cat* is supposed to be pretty good!
