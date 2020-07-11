@@ -1,0 +1,32 @@
+---
+title: "sakura-senzen"
+author: "Alex Cookson"
+date: "11/07/2020"
+output: html_document
+---
+
+```{r setup, message = FALSE}
+library(tidyverse)
+library(gganimate)
+library(ggthemes)
+library(lubridate)
+library(ggimage)
+
+theme_set(theme_minimal())
+
+sakura <- read_csv("https://raw.githubusercontent.com/tacookson/data/master/sakura-flowering/sakura-modern.csv")
+```
+
+```{r}
+image_link <- "sakura.png"
+
+sakura %>%
+  mutate(image = image_link) %>%
+  ggplot(aes(longitude, latitude, group = station_id)) +
+  borders(regions = "Japan", fill = "grey80", alpha = 0.1, colour = "grey80") +
+  geom_image(aes(image = image),
+             size = 0.02) +
+  coord_map() +
+  theme_map()
+```
+
