@@ -15,18 +15,52 @@ library(ggimage)
 theme_set(theme_minimal())
 
 sakura <- read_csv("https://raw.githubusercontent.com/tacookson/data/master/sakura-flowering/sakura-modern.csv")
+temps <- read_csv("https://raw.githubusercontent.com/tacookson/data/master/sakura-flowering/temperatures-modern.csv")
 ```
 
-```{r}
+```{r sakura-front-by-decade}
 image_link <- "sakura.png"
 
-sakura %>%
-  mutate(image = image_link) %>%
-  ggplot(aes(longitude, latitude, group = station_id)) +
+sakura_by_decade <- sakura %>%
+  mutate(decade = year %/% 10 * 10,
+         image = image_link) %>%
+  filter(!is.na(flower_doy),
+         !is.na(full_bloom_doy)) %>%
+  group_by(station_id, station_name, latitude, longitude, decade, image) %>%
+  summarise(flower_doy = mean(flower_doy),
+            full_bloom_doy = mean(full_bloom_doy),
+            .groups = "drop")
+
+p <- sakura_by_decade %>%
+  filter(decade >= 1960) %>%
+  ggplot(aes(longitude, latitude)) +
   borders(regions = "Japan", fill = "grey80", alpha = 0.1, colour = "grey80") +
-  geom_image(aes(image = image),
-             size = 0.02) +
+  geom_image(aes(image = image), size = 0.02) +
   coord_map() +
-  theme_map()
+  theme_map() +
+  facet_wrap(~ decade) +
+  transition_events(start = flower_doy,
+                    end = full_bloom_doy,
+                    range = c(1, 150),
+                    enter_length = 7,
+                    exit_length = 7) +
+  enter_grow() +
+  exit_fade() +
+  ggtitle("Day of year: {round(frame_time, 0)}")
+
+anim <- animate(p, duration = 20, fps = 10, start_pause = 2, end_pause = 2)
+
+anim_save("sakura-front.gif", anim)
 ```
+
+```{r tidymodels}
+library(tidymodels)
+
+sakura_split <- initial_split(sakura, strata = year)
+train <- training(sakura_split)
+test <- testing(sakura_split)
+
+sakura_recipe <- recipe(full_bloom_doy ~ latitude + longitude + year, data = train)
+```
+
 
