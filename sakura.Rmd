@@ -53,6 +53,18 @@ anim <- animate(p, duration = 20, fps = 10, start_pause = 2, end_pause = 2)
 anim_save("sakura-front.gif", anim)
 ```
 
+```{r time-series}
+sakura %>%
+  group_by(station_id) %>%
+  mutate(first_flower_doy = flower_doy[row_number() == 1]) %>%
+  ungroup() %>%
+  mutate(diff_flower_doy = flower_doy - first_flower_doy) %>%
+  ggplot(aes(year, diff_flower_doy, group = station_id)) +
+  geom_line(colour = "grey50") +
+  geom_smooth(method = "lm", group = 1)
+```
+
+
 ```{r tidymodels}
 library(tidymodels)
 
