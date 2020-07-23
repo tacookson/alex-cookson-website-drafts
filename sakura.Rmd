@@ -11,12 +11,76 @@ library(gganimate)
 library(ggthemes)
 library(lubridate)
 library(ggimage)
+library(ggspatial)
 
 theme_set(theme_minimal())
 
 sakura <- read_csv("https://raw.githubusercontent.com/tacookson/data/master/sakura-flowering/sakura-modern.csv")
 temps <- read_csv("https://raw.githubusercontent.com/tacookson/data/master/sakura-flowering/temperatures-modern.csv")
 ```
+
+
+```{r sakura-front-overall}
+sakura_overall <- sakura %>%
+  mutate(image = "sakura.png") %>%
+  filter(!is.na(flower_doy),
+         !is.na(full_bloom_doy)) %>%
+  group_by(station_id, station_name, latitude, longitude, image) %>%
+  summarise(flower_doy = mean(flower_doy),
+            full_bloom_doy = mean(full_bloom_doy),
+            .groups = "drop")
+
+sakura_labels <- sakura_overall %>%
+  filter(station_name %in% c("Sapporo", "Tokyo", "Kyoto",
+                             "Osaka", "Hiroshima", "Niigata",
+                             "Naha", "Nagasaki", "Sendai",
+                             "Hakodate")) %>%
+  select(station_name, longitude, latitude)
+
+p <- sakura_overall %>%
+  ggplot(aes(longitude, latitude)) +
+  borders(regions = "Japan", fill = "grey80", alpha = 0.1, colour = "grey80") +
+  geom_point(data = sakura_labels, aes(longitude, latitude, group = 1)) +
+  geom_text(data = sakura_labels, aes(label = station_name, x = longitude, y = latitude, group = 1),
+            hjust = -0.2,
+            vjust = 1) +
+  geom_image(aes(image = image), size = 0.025) +
+  annotation_north_arrow(location = "br",
+                         pad_x = unit(1/4, "in"),
+                         pad_y = unit(1/4, "in"),
+                         style = north_arrow_fancy_orienteering) +
+  coord_map() +
+  theme_map() +
+  transition_events(start = flower_doy - 3,
+                    end = full_bloom_doy - 3,
+                    range(1, 152),
+                    enter_length = 6,
+                    exit_length = 6) +
+  enter_grow() +
+  exit_shrink() +
+  ggtitle("Day of year: {round(frame_time, 0)}")
+
+anim <- animate(p, nframes = 152 * 2, start_pause = 15, end_pause = 15)
+
+
+
+sakura_overall %>%
+  ggplot(aes(longitude, latitude)) +
+  borders(regions = "Japan", fill = "grey80", alpha = 0.1, colour = "grey80") +
+  geom_point(data = sakura_labels) +
+  geom_text(data = sakura_labels,
+            aes(label = station_name),
+            hjust = -0.2,
+            vjust = 1) +
+  geom_image(aes(image = image), size = 0.025) +
+  annotation_north_arrow(location = "br",
+                         pad_x = unit(1/4, "in"),
+                         pad_y = unit(1/4, "in"),
+                         style = north_arrow_fancy_orienteering) +
+  coord_map() +
+  theme_map()
+```
+
 
 ```{r sakura-front-by-decade}
 image_link <- "sakura.png"
@@ -62,17 +126,6 @@ sakura %>%
   ggplot(aes(year, diff_flower_doy, group = station_id)) +
   geom_line(colour = "grey50") +
   geom_smooth(method = "lm", group = 1)
-```
-
-
-```{r tidymodels}
-library(tidymodels)
-
-sakura_split <- initial_split(sakura, strata = year)
-train <- training(sakura_split)
-test <- testing(sakura_split)
-
-sakura_recipe <- recipe(full_bloom_doy ~ latitude + longitude + year, data = train)
 ```
 
 
