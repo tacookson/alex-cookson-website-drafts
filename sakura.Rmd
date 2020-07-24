@@ -26,9 +26,56 @@ sakura_overall <- sakura %>%
             .groups = "drop")
 ```
 
-```{r basic-animation}
+```{r static-points-only}
+ggplot() +
+  geom_point(data = sakura_overall,
+             aes(longitude, latitude))
+```
+
+```{r animation-points-only}
+p <- ggplot() +
+  geom_point(data = sakura_overall,
+             aes(longitude, latitude)) +
+  transition_events(start = flower_doy,
+                    end = full_bloom_doy,
+                    enter_length = 5,
+                    exit_length = 5)
+
+animate(p)
+```
+
+```{r animation-points-only-add-title-and-pauses}
+p <- ggplot() +
+  geom_point(data = sakura_overall,
+             aes(longitude, latitude)) +
+  transition_events(start = flower_doy,
+                    end = full_bloom_doy,
+                    enter_length = 5,
+                    exit_length = 5) +
+  ggtitle("Day of year: {round(frame_time, 0)}")
+
+animate(p, start_pause = 20, end_pause = 20)
+```
+
+```{r animation-add-borders}
 p <- ggplot() +
   borders(regions = "Japan") +
+  geom_point(data = sakura_overall,
+             aes(longitude, latitude)) +
+  transition_events(start = flower_doy,
+                    end = full_bloom_doy,
+                    enter_length = 5,
+                    exit_length = 5) +
+  ggtitle("Day of year: {round(frame_time, 0)}")
+
+animate(p, start_pause = 20, end_pause = 20)
+```
+
+```{r animation-add-map-coord-and-theme}
+p <- ggplot() +
+  borders(regions = "Japan",
+          fill = "grey95",
+          colour = "grey80") +
   geom_point(data = sakura_overall,
              aes(longitude, latitude)) +
   coord_map() +
@@ -39,7 +86,7 @@ p <- ggplot() +
                     exit_length = 5) +
   ggtitle("Day of year: {round(frame_time, 0)}")
 
-anim <- animate(p, start_pause = 20, end_pause = 20)
+animate(p, start_pause = 20, end_pause = 20)
 ```
 
 ```{r city-labels}
@@ -50,19 +97,75 @@ sakura_labels <- sakura_overall %>%
   select(station_name, longitude, latitude)
 ```
 
+```{r animation-add-cities}
+p <- ggplot() +
+  borders(regions = "Japan",
+          fill = "grey95",
+          colour = "grey80") +
+  geom_point(data = sakura_labels,
+             aes(longitude, latitude),
+             size = 1) +
+  geom_text(data = sakura_labels,
+            aes(longitude, latitude, label = station_name),
+            hjust = -0.2,
+            vjust = 1) +
+  geom_point(data = sakura_overall,
+             aes(longitude, latitude)) +
+  coord_map() +
+  theme_map() +
+  transition_events(start = flower_doy,
+                    end = full_bloom_doy,
+                    enter_length = 5,
+                    exit_length = 5) +
+  ggtitle("Day of year: {round(frame_time, 0)}")
+
+animate(p, start_pause = 20, end_pause = 20)
+```
+
+
+```{r animation-add-sakura-image}
+p <- ggplot() +
+  borders(regions = "Japan",
+          fill = "grey95",
+          colour = "grey80") +
+  geom_point(data = sakura_labels,
+             aes(longitude, latitude),
+             size = 1) +
+  geom_text(data = sakura_labels,
+            aes(longitude, latitude, label = station_name),
+            hjust = -0.2,
+            vjust = 1) +
+  geom_image(data = sakura_overall,
+             aes(longitude, latitude, image = "sakura.png"),
+             size = 0.03) +
+  coord_map() +
+  theme_map() +
+  transition_events(start = flower_doy,
+                    end = full_bloom_doy,
+                    enter_length = 5,
+                    exit_length = 5) +
+  ggtitle("Day of year: {round(frame_time, 0)}")
+
+animate(p, start_pause = 20, end_pause = 20)
+```
+
+
+
+
 ```{r final-for-now-animation}
 p <- ggplot() +
-  borders(regions = "Japan", fill = "grey80", alpha = 0.1, colour = "grey80") +
+  borders(regions = "Japan",
+          fill = "grey95",
+          colour = "grey80") +
   geom_point(data = sakura_labels,
-             aes(longitude, latitude, group = 1)) +
+             aes(longitude, latitude)) +
   geom_text(data = sakura_labels,
-            aes(longitude, latitude, label = station_name, group = 1),
+            aes(longitude, latitude, label = station_name),
             hjust = -0.2,
-            vjust = 1,
-            size = 8) +
+            vjust = 1) +
   geom_image(data = sakura_overall,
              aes(longitude, latitude, image = image),
-             size = 0.025) +
+             size = 0.03) +
   annotation_north_arrow(location = "br",
                          pad_x = unit(1/4, "in"),
                          pad_y = unit(1/4, "in"),
