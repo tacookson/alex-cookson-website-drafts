@@ -1,0 +1,22 @@
+---
+title: "fictional-character-personalities"
+author: "Alex Cookson"
+date: "31/07/2020"
+output: html_document
+---
+
+```{r setup, message = FALSE, warning = FALSE}
+library(tidyverse)
+
+# Change this to GitHub link before publishing
+personalities <- read_tsv("~/data/fictional-character-personalities/personalities.txt")
+```
+
+```{r eda}
+personalities %>%
+  mutate(spectrum_name = paste(spectrum_low, spectrum_high, sep = "_")) %>%
+  select(character_code, spectrum_name, mean) %>%
+  pivot_wider(names_from = spectrum_name, values_from = mean, values_fill = NA)
+```
+
+
