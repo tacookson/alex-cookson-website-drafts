@@ -19,4 +19,18 @@ personalities %>%
   pivot_wider(names_from = spectrum_name, values_from = mean, values_fill = NA)
 ```
 
+```{r random-spectrum-top-characters}
+personalities %>%
+  filter(spectrum == sample(unique(spectrum), 1)) %>%
+  top_n(16, wt = mean) %>%
+  mutate(fictional_work = fct_reorder(paste(character_name, fictional_work, sep = " | "), mean),
+         label = paste(spectrum_low, spectrum_high, sep = " / ")) %>%
+  ggplot(aes(mean, fictional_work)) +
+  geom_point(size = 3) +
+  geom_text(aes(label = label),
+            hjust = 1,
+            nudge_x = -1)
+```
+
+
 
