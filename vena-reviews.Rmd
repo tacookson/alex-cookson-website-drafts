@@ -10,6 +10,9 @@ library(tidyverse) # Data manipulation
 library(rvest) # Scraping
 library(tidytext) # Text analysis
 library(textstem) # Lemmatization
+library(glmnet) # LASSO model
+
+theme_set(theme_minimal())
 ```
 
 ```{r scrape-function}
@@ -49,18 +52,103 @@ pros_cons_raw <- tibble(base_url = "https://www.trustradius.com/products/vena-so
 
 ```{r clean-and-tokenize-text}
 pros_cons <- pros_cons_raw %>%
-  mutate(id = row_number(),
+  mutate(bullet_id = row_number(),
          score = ifelse(pro_con == "Plus", 1, 0)) %>%
-  select(id, text, score)
+  select(bullet_id, text, score)
 
 tokens <- pros_cons %>%
   unnest_tokens(word, text) %>%
   anti_join(stop_words, by = "word") %>%
   filter(str_detect(word, "[A-Za-z]")) %>%
   mutate(word = lemmatize_words(word)) %>%
-  distinct(id, word, .keep_all = TRUE)
+  distinct(bullet_id, word, .keep_all = TRUE)
+```
+
+```{r lasso-model-prep}
+tokens_clean <- tokens %>%
+  mutate(token_id = row_number()) %>%
+  select(token_id, word, score)
+
+token_matrix <- tokens_clean %>%
+  select(token_id, word) %>%
+  cast_sparse(token_id, word)
+
+ids <- as.integer(rownames(token_matrix))
+
+ratings <- tokens_clean$score[ids]
 ```
 
 ```{r lasso-model}
+cv_lasso <- cv.glmnet(token_matrix,
+                      ratings,
+                      nfolds = 100)
 
+cv_lasso_tidy <- cv_lasso$glmnet.fit %>%
+  tidy() %>%
+  filter(lambda == cv_lasso$lambda.1se)
 ```
+
+```{r sentiment-lexicon}
+cv_lasso_tidy %>%
+  mutate(direction = ifelse(estimate > 0, "Positive", "Negative")) %>%
+  filter(term != "(Intercept)") %>%
+  group_by(direction) %>%
+  top_n(12, wt = abs(estimate)) %>%
+  ungroup() %>%
+  mutate(term = fct_reorder(term, estimate)) %>%
+  ggplot(aes(estimate, term, fill = direction)) +
+  geom_col()
+```
+
+
+Bigrams
+
+```{r}
+bigrams <- pros_cons %>%
+  unnest_tokens(bigram, text, token = "ngrams", n = 2) %>%
+  separate(bigram, into = c("word1", "word2"), sep = " ") %>%
+  filter(!word1 %in% stop_words$word,
+         !word2 %in% stop_words$word,
+         !is.na(word1),
+         !is.na(word2)) %>%
+  unite("bigram", word1, word2, sep = " ") %>%
+  distinct(bullet_id, bigram, .keep_all = TRUE)
+```
+
+```{r lasso-model-prep}
+bigrams_clean <- bigrams %>%
+  mutate(bigram_id = row_number()) %>%
+  select(bigram_id, bigram, score)
+
+bigram_matrix <- bigrams_clean %>%
+  select(bigram_id, bigram) %>%
+  cast_sparse(bigram_id, bigram)
+
+ids <- as.integer(rownames(bigram_matrix))
+
+ratings <- bigrams_clean$score[ids]
+```
+
+```{r lasso-model}
+cv_lasso <- cv.glmnet(bigram_matrix,
+                      ratings,
+                      nfolds = 100)
+
+cv_lasso_tidy <- cv_lasso$glmnet.fit %>%
+  tidy() %>%
+  filter(lambda == cv_lasso$lambda.min)
+```
+
+```{r sentiment-lexicon}
+cv_lasso_tidy %>%
+  mutate(direction = ifelse(estimate > 0, "Positive", "Negative")) %>%
+  filter(term != "(Intercept)") %>%
+  group_by(direction) %>%
+  top_n(12, wt = abs(estimate)) %>%
+  ungroup() %>%
+  mutate(term = fct_reorder(term, estimate)) %>%
+  ggplot(aes(estimate, term, fill = direction)) +
+  geom_col()
+```
+
+
