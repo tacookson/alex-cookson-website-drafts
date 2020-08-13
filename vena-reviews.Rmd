@@ -1,0 +1,66 @@
+---
+title: "Vena Reviews"
+author: "Alex Cookson"
+date: "12/08/2020"
+output: html_document
+---
+
+```{r setup}
+library(tidyverse) # Data manipulation
+library(rvest) # Scraping
+library(tidytext) # Text analysis
+library(textstem) # Lemmatization
+```
+
+```{r scrape-function}
+scrape_pros_cons <- function(url) {
+  # Read website
+  webpage <- read_html(url)
+  
+  # Plus/Minus
+  icons <- webpage %>%
+    html_nodes(".ugc .sprite") %>%
+    html_attrs() %>%
+    unlist() %>%
+    as_tibble_col(column_name = "pro_con") %>%
+    mutate(pro_con = str_remove(pro_con, "sprite sprite-proCon"))
+  
+  # Text
+  text <- webpage %>%
+    html_nodes(".ugc div:nth-child(2)") %>%
+    html_text() %>%
+    as_tibble_col(column_name = "text")
+  
+  # Merge
+  return(bind_cols(icons, text))
+}
+
+```
+
+```{r scrape-pros-cons}
+pros_cons_raw <- tibble(base_url = "https://www.trustradius.com/products/vena-solutions/reviews?f=",
+       review_num = seq(0, 125, by = 25)) %>%
+  mutate(scrape_url = paste0(base_url, review_num)) %>%
+  select(scrape_url) %>%
+  mutate(data = map(scrape_url, possibly(scrape_pros_cons, NULL))) %>%
+  unnest(data) %>%
+  select(-scrape_url)
+```
+
+```{r clean-and-tokenize-text}
+pros_cons <- pros_cons_raw %>%
+  mutate(id = row_number(),
+         score = ifelse(pro_con == "Plus", 1, 0)) %>%
+  select(id, text, score)
+
+tokens <- pros_cons %>%
+  unnest_tokens(word, text) %>%
+  anti_join(stop_words, by = "word") %>%
+  filter(str_detect(word, "[A-Za-z]")) %>%
+  mutate(word = lemmatize_words(word)) %>%
+  distinct(id, word, .keep_all = TRUE)
+```
+
+```{r lasso-model}
+
+```
