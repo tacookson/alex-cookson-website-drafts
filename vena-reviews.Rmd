@@ -1,19 +1,26 @@
 ---
-title: "Vena Reviews"
-author: "Alex Cookson"
-date: "12/08/2020"
-output: html_document
+title: "Vena Solutions Sentiment Lexicon"
+author: "Alex Cookson (alexander.cookson@gmail.com)"
+date: "2020-08-13"
+output:
+  pdf_document: default
 ---
 
-```{r setup}
+First, we set up our R environment with the necessary package and set a default theme for graphs.
+
+```{r setup, message = FALSE, warning = FALSE}
 library(tidyverse) # Data manipulation
 library(rvest) # Scraping
 library(tidytext) # Text analysis
 library(textstem) # Lemmatization
 library(glmnet) # LASSO model
+library(extrafont) # Additional fonts for graphs
 
+# set default theme for graphs
 theme_set(theme_minimal())
 ```
+
+Next, we write a function to scrape the reviews from TrustRadius.com. This function scrapes only the "Pros and Cons" list, leaving other parts of the webpage alone.
 
 ```{r scrape-function}
 scrape_pros_cons <- function(url) {
@@ -37,8 +44,9 @@ scrape_pros_cons <- function(url) {
   # Merge
   return(bind_cols(icons, text))
 }
-
 ```
+
+Now, we execute the function and clean the output so that we have something tidy to work with. We also convert "Pro" or "Con" to a score (1 for "Pro", 0 for "Con"). Having a numerical score lets us apply LASSO regression, an approach we use here to create a "sentiment lexicon" of positive and negative terms associated with Vena Solutions' product.
 
 ```{r scrape-pros-cons}
 pros_cons_raw <- tibble(base_url = "https://www.trustradius.com/products/vena-solutions/reviews?f=",
@@ -48,60 +56,14 @@ pros_cons_raw <- tibble(base_url = "https://www.trustradius.com/products/vena-so
   mutate(data = map(scrape_url, possibly(scrape_pros_cons, NULL))) %>%
   unnest(data) %>%
   select(-scrape_url)
-```
 
-```{r clean-and-tokenize-text}
 pros_cons <- pros_cons_raw %>%
   mutate(bullet_id = row_number(),
          score = ifelse(pro_con == "Plus", 1, 0)) %>%
   select(bullet_id, text, score)
-
-tokens <- pros_cons %>%
-  unnest_tokens(word, text) %>%
-  anti_join(stop_words, by = "word") %>%
-  filter(str_detect(word, "[A-Za-z]")) %>%
-  mutate(word = lemmatize_words(word)) %>%
-  distinct(bullet_id, word, .keep_all = TRUE)
 ```
 
-```{r lasso-model-prep}
-tokens_clean <- tokens %>%
-  mutate(token_id = row_number()) %>%
-  select(token_id, word, score)
-
-token_matrix <- tokens_clean %>%
-  select(token_id, word) %>%
-  cast_sparse(token_id, word)
-
-ids <- as.integer(rownames(token_matrix))
-
-ratings <- tokens_clean$score[ids]
-```
-
-```{r lasso-model}
-cv_lasso <- cv.glmnet(token_matrix,
-                      ratings,
-                      nfolds = 100)
-
-cv_lasso_tidy <- cv_lasso$glmnet.fit %>%
-  tidy() %>%
-  filter(lambda == cv_lasso$lambda.1se)
-```
-
-```{r sentiment-lexicon}
-cv_lasso_tidy %>%
-  mutate(direction = ifelse(estimate > 0, "Positive", "Negative")) %>%
-  filter(term != "(Intercept)") %>%
-  group_by(direction) %>%
-  top_n(12, wt = abs(estimate)) %>%
-  ungroup() %>%
-  mutate(term = fct_reorder(term, estimate)) %>%
-  ggplot(aes(estimate, term, fill = direction)) +
-  geom_col()
-```
-
-
-Bigrams
+We take the raw text of each pro/con bullet point and extract "bigrams" (two-word terms) from the text. We also get rid of "stop words" (e.g., "a", "the", "and"), which don't give us a lot of information because they are used so frequently.
 
 ```{r}
 bigrams <- pros_cons %>%
@@ -114,6 +76,8 @@ bigrams <- pros_cons %>%
   unite("bigram", word1, word2, sep = " ") %>%
   distinct(bullet_id, bigram, .keep_all = TRUE)
 ```
+
+Now we get our data in the proper format for running LASSO regression. We create a sparse document-term matrix of bigrams and extract the pro/con score (1 or 0).
 
 ```{r lasso-model-prep}
 bigrams_clean <- bigrams %>%
@@ -129,6 +93,8 @@ ids <- as.integer(rownames(bigram_matrix))
 ratings <- bigrams_clean$score[ids]
 ```
 
+We fit a cross-validated LASSO model with 100 folds to create a list of terms (bigrams) and their estimated effect on the score.
+
 ```{r lasso-model}
 cv_lasso <- cv.glmnet(bigram_matrix,
                       ratings,
@@ -139,16 +105,30 @@ cv_lasso_tidy <- cv_lasso$glmnet.fit %>%
   filter(lambda == cv_lasso$lambda.min)
 ```
 
-```{r sentiment-lexicon}
-cv_lasso_tidy %>%
-  mutate(direction = ifelse(estimate > 0, "Positive", "Negative")) %>%
+With a fitted LASSO model, we can take the top positive and negative terms and visualize their sentiment score. We have, in essence, created a "sentiment lexicon" that tells us which terms tend to be associated with positive or negative feelings about Vena Solutions. Furthermore, we have also *quantified* the degree of positive or negative sentiment.
+
+```{r sentiment-lexicon, warning = FALSE}
+sentiment_lexicon <- cv_lasso_tidy %>%
+  mutate(direction = ifelse(estimate > 0, "Positive", "Negative"),
+         direction = fct_relevel(direction, "Positive")) %>%
   filter(term != "(Intercept)") %>%
+  select(term, estimate, direction)
+
+sentiment_lexicon %>%
   group_by(direction) %>%
   top_n(12, wt = abs(estimate)) %>%
   ungroup() %>%
   mutate(term = fct_reorder(term, estimate)) %>%
   ggplot(aes(estimate, term, fill = direction)) +
-  geom_col()
+  geom_col() +
+  geom_vline(xintercept = 0, size = 1) +
+  scale_fill_manual(values = c("#05668D", "#FF4365")) +
+  labs(title = "Vena Solutions Sentiment Lexicon",
+       subtitle = "Top 12 positive and negative terms from TrustRadius reviews",
+       fill = "Sentiment",
+       x = "Sentiment Score",
+       y = "Term",
+       caption = "Source: TrustRadius Reviews") +
+  theme(text = element_text(family = "Bahnschrift"),
+        axis.text = element_text(size = 12))
 ```
-
-
