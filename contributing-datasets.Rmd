@@ -11,3 +11,30 @@ Main points:
 - The datasets we use are important (see iris dataset as a default vs. Palmer Penguins as a proposed replacement)
 - Curating datasets is a learning opportunity in and of itself (especially data cleaning, web scraping, and creative problem-solving)
 - Output of curating datasets -- the datasets themselves -- are a worthy and useful contribution to the R community as a whole (and beyond, since a CSV or TSV file is language-agnostic)
+
+
+### Compelling Datasets are Powerful
+
+- A compelling dataset will make someone exclaim, "Wow! That's so cool!"
+- They will feel compelled to ask questions and answer them, which flips the standard "data-technique" relationship. Instead of using data as a way to illustrate a technique, the technique becomes a means to getting an answer to a burning question out of the data
+
+
+### Datasets are Important
+
+- Iris dataset, one of the "standards", was compiled by Ronald Fisher and originally published in the *Annals of Eugenics* (yikes!)
+- Palmer Penguins dataset (https://github.com/allisonhorst/palmerpenguins) is a great alternative, without problematic connections to eugenics, with the bonus of being crazy-cute (https://github.com/allisonhorst/palmerpenguins/blob/master/man/figures/lter_penguins.png)
+- Classic advice for learners is to work on a project. This is much easier if a dataset already taps into an existing interest
+- They contribute to the community:
+    - Katherine Goode using bat movement data to illustrate `gganimate` on a Halloween-day presentation (https://www.datarepository.movebank.org/handle/10255/move.421)
+    - Marine biology lecturers using cetaceans dataset from Tidy Tuesday (https://github.com/rfordatascience/tidytuesday/tree/master/data/2018/2018-12-18)
+
+
+### Learn from Curating!
+
+- Goal: get already-existing data into a tidy format (ready for Tidy Tuesday!)
+- Things I've learned by curating datasets:
+    - Webscraping with `rvest`
+    - Extracting data from PDFs with `pdftools` (https://themockup.blog/posts/2020-04-03-beer-and-pdftools-a-vignette/)
+    - Setting up and using Google Translate API with `googleLanguageR`
+    - Iterating with `purrr`
+    - Endless data cleaning of data "in the wild" with `dplyr` (joins, de-duplication, `pivot_wider`/`pivot_longer`, `coalesce`, `fill`, `case_when`, lots of regular expressions)
