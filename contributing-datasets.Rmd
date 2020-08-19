@@ -1,0 +1,13 @@
+---
+title: "contributing-datasets"
+author: "Alex Cookson"
+date: "19/08/2020"
+output: html_document
+---
+
+Main points:
+
+- A compelling or interesting dataset can be a significant motivator for people to use and learn R
+- The datasets we use are important (see iris dataset as a default vs. Palmer Penguins as a proposed replacement)
+- Curating datasets is a learning opportunity in and of itself (especially data cleaning, web scraping, and creative problem-solving)
+- Output of curating datasets -- the datasets themselves -- are a worthy and useful contribution to the R community as a whole (and beyond, since a CSV or TSV file is language-agnostic)
