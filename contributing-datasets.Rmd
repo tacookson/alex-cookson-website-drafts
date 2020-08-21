@@ -5,26 +5,34 @@ date: "2020-08-19"
 output: html_document
 ---
 
-Main points:
-
-- A compelling or interesting dataset can be a significant motivator for people to use and learn R
-- The datasets we use are important (see iris dataset as a default vs. Palmer Penguins as a proposed replacement)
-- Curating datasets is a learning opportunity in and of itself (especially data cleaning, web scraping, and creative problem-solving)
-- Output of curating datasets -- the datasets themselves -- are a worthy and useful contribution to the R community as a whole (and beyond, since a CSV or TSV file is language-agnostic)
+Who is the audience? Teachers (who put together instructional materials) and Learners (who are looking for projects to develop their skills)
 
 
-### Compelling Datasets are Powerful
+Convince audience of two things:
+
+1. You should care about datasets: The datasets we use to teach and learn are **important**. They are more than a means of illustrating or teaching a concept.
+1. You should curate your own datasets: Datasets are an accessible way for learners to get their hands dirty with projects and they are a way to contribute to the community.
+
+
+### You should care about datasets
+
+Datasets as a way to engage learners:
 
 - A compelling dataset will make someone exclaim, "Wow! That's so cool!"
-- They will feel compelled to ask questions and answer them, which flips the standard "data-technique" relationship. Instead of using data as a way to illustrate a technique, the technique becomes a means to getting an answer to a burning question out of the data
-- Classic advice for learners is to work on a project. This is much easier if a dataset already taps into an existing interest
-- They contribute to the community:
     - Katherine Goode using bat movement data to illustrate `gganimate` on a Halloween-day presentation (https://www.datarepository.movebank.org/handle/10255/move.421) and (https://goodekat.github.io/presentations/2019-isugg-gganimate-spooky/slides.html#1)
     - Marine biology lecturers using cetaceans dataset from Tidy Tuesday (https://github.com/rfordatascience/tidytuesday/tree/master/data/2018/2018-12-18)
 
-### The Datasets we use are Important
+- Learners will feel compelled to ask questions and answer them, which flips the standard "data-technique" relationship. Instead of using data as a way to illustrate a technique, the technique becomes a means to getting an answer to a burning question out of the data.
 
-- Iris dataset, one of the "standards", was compiled by Ronald Fisher and originally published in the *Annals of Eugenics* (yikes!)
+
+
+Datasets reflect the values of our community:
+
+- Iris dataset, one of the classic illustrative datasets, was first published by Ronald Fisher in the *Annals of Eugenics*
+    - The first sentence of the foreward of the first issue of the *Annals of Eugenics* is: "The time seems fully ripe  for the issue of  a journal which shall devote its pages wholly to the scientific treatment of  racial problems in man." (https://onlinelibrary.wiley.com/doi/epdf/10.1111/j.1469-1809.1925.tb02036.x)
+    - The first paragraph of the paper in which Iris appears states that Fisher is applying a principle from craniometry to Iris taxonomy (https://digital.library.adelaide.edu.au/dspace/bitstream/2440/15227/1/138.pdf)
+- Blog post on the problems of Iris: https://armchairecology.blog/iris-dataset/
+
 - Palmer Penguins dataset (https://github.com/allisonhorst/palmerpenguins) is a great alternative, without problematic connections to eugenics, with the bonus of being crazy-cute (https://github.com/allisonhorst/palmerpenguins/blob/master/man/figures/lter_penguins.png)
 - Making data available is a step to making issues visible, because data can answer questions or provide new perspectives:
     - Public policy (e.g., biking count data)
@@ -35,9 +43,21 @@ Main points:
 ### Learn from Curating!
 
 - Goal: get already-existing data into a tidy format (ready for Tidy Tuesday!)
+- Classic advice for learners is to work on a project. This is much easier if a dataset already taps into an existing interest.
+- It's a repeatable project with lots of variation and degrees of difficulty, depending on the dataset being curated
 - Things I've learned by curating datasets:
     - Webscraping with `rvest`
     - Extracting data from PDFs with `pdftools` (https://themockup.blog/posts/2020-04-03-beer-and-pdftools-a-vignette/)
     - Setting up and using Google Translate API with `googleLanguageR`
     - Iterating with `purrr`
     - Endless data cleaning of data "in the wild" with `dplyr` (joins, de-duplication, `pivot_wider`/`pivot_longer`, `coalesce`, `fill`, `case_when`, lots of regular expressions)
+    
+    
+### Appendix
+
+Main points:
+
+- A compelling or interesting dataset can be a significant motivator for people to use and learn R
+- The datasets we use are important (see iris dataset as a default vs. Palmer Penguins as a proposed replacement)
+- Curating datasets is a learning opportunity in and of itself (especially data cleaning, web scraping, and creative problem-solving)
+- Output of curating datasets -- the datasets themselves -- are a worthy and useful contribution to the R community as a whole (and beyond, since a CSV or TSV file is language-agnostic)
