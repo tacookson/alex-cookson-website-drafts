@@ -1,7 +1,7 @@
 ---
-title: "contributing-datasets"
+title: "Benefits of Curating Datasets"
 author: "Alex Cookson"
-date: "19/08/2020"
+date: "2020-08-19"
 output: html_document
 ---
 
@@ -17,16 +17,19 @@ Main points:
 
 - A compelling dataset will make someone exclaim, "Wow! That's so cool!"
 - They will feel compelled to ask questions and answer them, which flips the standard "data-technique" relationship. Instead of using data as a way to illustrate a technique, the technique becomes a means to getting an answer to a burning question out of the data
+- Classic advice for learners is to work on a project. This is much easier if a dataset already taps into an existing interest
+- They contribute to the community:
+    - Katherine Goode using bat movement data to illustrate `gganimate` on a Halloween-day presentation (https://www.datarepository.movebank.org/handle/10255/move.421) and (https://goodekat.github.io/presentations/2019-isugg-gganimate-spooky/slides.html#1)
+    - Marine biology lecturers using cetaceans dataset from Tidy Tuesday (https://github.com/rfordatascience/tidytuesday/tree/master/data/2018/2018-12-18)
 
-
-### Datasets are Important
+### The Datasets we use are Important
 
 - Iris dataset, one of the "standards", was compiled by Ronald Fisher and originally published in the *Annals of Eugenics* (yikes!)
 - Palmer Penguins dataset (https://github.com/allisonhorst/palmerpenguins) is a great alternative, without problematic connections to eugenics, with the bonus of being crazy-cute (https://github.com/allisonhorst/palmerpenguins/blob/master/man/figures/lter_penguins.png)
-- Classic advice for learners is to work on a project. This is much easier if a dataset already taps into an existing interest
-- They contribute to the community:
-    - Katherine Goode using bat movement data to illustrate `gganimate` on a Halloween-day presentation (https://www.datarepository.movebank.org/handle/10255/move.421)
-    - Marine biology lecturers using cetaceans dataset from Tidy Tuesday (https://github.com/rfordatascience/tidytuesday/tree/master/data/2018/2018-12-18)
+- Making data available is a step to making issues visible, because data can answer questions or provide new perspectives:
+    - Public policy (e.g., biking count data)
+    - Social issues (e.g, American Slavery and Juneteenth (https://github.com/rfordatascience/tidytuesday/blob/master/data/2020/2020-06-16/readme.md))
+    - Highlighting things that don't get the attention they deserve (e.g, women's sports (https://github.com/rfordatascience/tidytuesday/tree/master/data/2019/2019-07-09))
 
 
 ### Learn from Curating!
