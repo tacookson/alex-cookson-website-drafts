@@ -5,6 +5,26 @@ date: "2020-08-19"
 output: html_document
 ---
 
+### Who is the audience?
+
+Anyone who pursues personal projects with R or uses personal projects to learn R.
+
+
+### What should they think at the end of the post?
+
+"I'm going to put together some datasets!"
+
+
+### Why should they think that?
+
+1. Datasets we use are Important (to the community). Example: Iris dataset's association with Ronald Fisher and eugenics, and the proposed and enthusiastically received alternative dataset: Palmer Penguins.
+1. Datasets we use are important (to us as learners). Having a "Wow! That's so cool!" dataset provides inherent motivation to learn because the dataset will prompt questions that you will feel *compelled* to answer, even if it means working through a new technique.
+1. Datasets -- even just curating them -- let you express your individuality. They are a data scientist's fashion/style. Example: I've never met Ryan Timpe (https://www.ryantimpe.com/), but I'll bet he likes Golden Girls and dinosaurs.
+
+
+
+### Original Outline
+
 Who is the audience? Teachers (who put together instructional materials) and Learners (who are looking for projects to develop their skills)
 
 
