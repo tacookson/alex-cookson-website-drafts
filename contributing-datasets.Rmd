@@ -5,21 +5,40 @@ date: "2020-08-19"
 output: html_document
 ---
 
+### Abstract
+
+You're probably familiar with some of the classic "learning" datasets: mtcars, nycflights, and Titanic survivors, to name a few. Most of these are fine for simple illustrations in vignettes or toy examples, but they leave something to be desired. They're kind of boring.
+
+Datasets are capable of so much more. They have the ability to prompt someone to exclaim, "Wow! That's so cool!" and come up with a huge list of questions they want to ask the data. In other words, datasets are able to provide tremendous motivation for learners to get answers to their questions, and learn R/data science/machine learning as a by-product of getting those answers.
+
+My goal is to get you to go out and curate datasets: gather untidy data that already exists out in the world and get it into to a tidy, easily accessible format. Why?
+
+- Curating datasets is a learning opportunity by itself (web scraping, data manipulation, APIs)
+- It's a great way to contribute to the community while adding a little bit of your personality to the community at large
+- The datasets we use are a reflection of our values as a community (iris's association with eugenics and Palmer Penguins as a proposed alternative)
+
+
+
+
+
 ### Who is the audience?
 
-Anyone who pursues personal projects with R or uses personal projects to learn R.
+Anyone who pursues personal projects with R.
 
 
-### What should they think at the end of the post?
+### What should readers take away from this post?
 
-"I'm going to put together some datasets!"
+- "I'm going to put together some datasets!"
+- This is a sequel of sorts to Ryan Timpe's [*Learning R with humorous side projects*](https://www.ryantimpe.com/post/rstudio/)
 
 
 ### Why should they think that?
 
-1. Datasets we use are Important (to the community). Example: Iris dataset's association with Ronald Fisher and eugenics, and the proposed and enthusiastically received alternative dataset: Palmer Penguins.
 1. Datasets we use are important (to us as learners). Having a "Wow! That's so cool!" dataset provides inherent motivation to learn because the dataset will prompt questions that you will feel *compelled* to answer, even if it means working through a new technique.
 1. Datasets -- even just curating them -- let you express your individuality. They are a data scientist's fashion/style. Example: I've never met Ryan Timpe (https://www.ryantimpe.com/), but I'll bet he likes Golden Girls and dinosaurs.
+1. Datasets we use are Important (to the community). Example: Iris dataset's association with Ronald Fisher and eugenics, and the proposed and enthusiastically received alternative dataset: Palmer Penguins.
+
+
 
 
 
