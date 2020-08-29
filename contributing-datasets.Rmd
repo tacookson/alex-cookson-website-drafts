@@ -7,9 +7,15 @@ output: html_document
 
 ### Abstract
 
-You're probably familiar with some of the classic "learning" datasets: mtcars, nycflights, and Titanic survivors, to name a few. Most of these are fine for simple illustrations in vignettes or toy examples, but they leave something to be desired. They're kind of boring.
+There are a few classic datasets, like mtcars or nycflights. They're okay, but they leave something to be desired for folks learning R: they're kind of boring.
 
-Datasets are capable of so much more. They have the ability to prompt someone to exclaim, "Wow! That's so cool!" and come up with a huge list of questions they want to ask the data. In other words, datasets are able to provide tremendous motivation for learners to get answers to their questions, and learn R/data science/machine learning as a by-product of getting those answers.
+There's a big difference between Okay Datasets and Great Datasets. Great Datasets prompt you to exclaim, "That's so cool!" They get your blood pumping and mind racing with questions you want answered. They give tremendous motivation to answer those questions. And in answering those questions, you'll probably learn some R.
+
+I want you to curate Great Datasets. You'll contribute to the richness of our community, you'll learn some R yourself, and you'll feel fantastic when someone finds your Great Dataset and exclaims, "That's so cool!"
+
+
+
+I've learned about web scraping, data cleaning, and even translating Japanese Kanji characters to English in my question to curate Great Datasets
 
 My goal is to get you to go out and curate datasets: gather untidy data that already exists out in the world and get it into to a tidy, easily accessible format. Why?
 
