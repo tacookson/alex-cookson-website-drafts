@@ -1,0 +1,524 @@
+---
+title: "sakura-senzen"
+author: "Alex Cookson"
+date: "11/07/2020"
+output: html_document
+---
+
+Title: Building an animation step-by-step with cherry blossoms
+
+Reference Katherine Goode's great presentation: https://goodekat.github.io/presentations/2019-isugg-gganimate-spooky/slides.html#1
+
+
+
+### Data preparation
+
+Goal: show the typical flowering and full-bloom dates of sakura (cherry blossom) trees in Japan. We use a dataset from (dataset provenance)
+
+```{r setup, message = FALSE}
+library(tidyverse)
+library(gganimate)
+library(ggthemes)
+library(lubridate)
+library(ggimage)
+library(extrafont)
+library(ggtext)
+library(kableExtra)
+
+sakura <- read_csv("https://raw.githubusercontent.com/tacookson/data/master/sakura-flowering/sakura-modern.csv")
+```
+
+```{r sakura-average-days}
+sakura_overall <- sakura %>%
+  # Ensure complete records for flowering and full-bloom dates
+  filter(!is.na(flower_doy),
+         !is.na(full_bloom_doy)) %>%
+  # Calculate average days of year
+  group_by(station_id, station_name, latitude, longitude) %>%
+  summarise(flower_doy = mean(flower_doy),
+            full_bloom_doy = mean(full_bloom_doy),
+            .groups = "drop")
+
+sakura_overall %>%
+  head() %>%
+  kable(format = "html") %>%
+  kable_styling()
+```
+
+We keep day-of-year for now because numbers are easier to work with than dates. We'll fix this later.
+
+This is a static (non-animated) graph of station locations. You can kind of make out the shape of Japan's islands. The dots at the bottom are smaller islands like Okinawa.
+
+```{r static-points-only}
+ggplot() +
+  geom_point(data = sakura_overall,
+             aes(longitude, latitude))
+```
+
+
+
+First, we'll set up the basic animation, with points appearing and disappearing at the right time. This is essentially the same as the static location graph we just plotted. We are adding the complication of dots appearing and disappearing at different times.
+
+To do this we use the `transition_events()` function, which lets individual points stay on-screen for different periods of time. We need to specify 4 arguments:
+
+- `start` and `end` specify when in the timeline we're creating the points appear and disappear
+- `enter_length` and `exit_length` specify how long the points have to appear and disappear. These values aren't too important right now because we haven't specified the *type* of transition, so the points are appearing and disappearing instantly. But they'll become important when we start polishing our animation. The numbers use the same scale as the data, so the code below gives each point 5 days to appear and disappear.
+
+```{r animation-points-only}
+ggplot() +
+  geom_point(data = sakura_overall,
+             aes(longitude, latitude)) +
+  transition_events(start = flower_doy,
+                    end = full_bloom_doy,
+                    enter_length = 5,
+                    exit_length = 5)
+```
+
+
+
+Add title
+
+```{r animation-points-only-add-title}
+ggplot() +
+  geom_point(data = sakura_overall,
+             aes(longitude, latitude)) +
+  transition_events(start = flower_doy,
+                    end = full_bloom_doy,
+                    enter_length = 5,
+                    exit_length = 5) +
+  ggtitle("Day of year: {round(frame_time, 0)}")
+```
+
+
+Add pauses at beginning and end.
+
+We are now assigning the plot to an object `p`, then using `p` as the first argument in the `animate()` function, which lets us tweak things like start and end pauses.
+
+```{r animation-points-only-add-pauses}
+p <- ggplot() +
+  geom_point(data = sakura_overall,
+             aes(longitude, latitude)) +
+  transition_events(start = flower_doy,
+                    end = full_bloom_doy,
+                    enter_length = 5,
+                    exit_length = 5) +
+  ggtitle("Day of year: {round(frame_time, 0)}")
+
+animate(p, start_pause = 20, end_pause = 20)
+```
+
+```{r animation-add-borders}
+p <- ggplot() +
+  borders(regions = "Japan") +
+  geom_point(data = sakura_overall,
+             aes(longitude, latitude)) +
+  transition_events(start = flower_doy,
+                    end = full_bloom_doy,
+                    enter_length = 5,
+                    exit_length = 5) +
+  ggtitle("Day of year: {round(frame_time, 0)}")
+
+animate(p, start_pause = 20, end_pause = 20)
+```
+
+```{r animation-add-map-coord-and-theme}
+p <- ggplot() +
+  borders(regions = "Japan",
+          fill = "grey95",
+          colour = "grey80") +
+  geom_point(data = sakura_overall,
+             aes(longitude, latitude)) +
+  coord_map() +
+  theme_map() +
+  transition_events(start = flower_doy,
+                    end = full_bloom_doy,
+                    enter_length = 5,
+                    exit_length = 5) +
+  ggtitle("Day of year: {round(frame_time, 0)}")
+
+animate(p, start_pause = 20, end_pause = 20)
+```
+
+```{r city-labels}
+sakura_labels <- sakura_overall %>%
+  filter(station_name %in% c("Sapporo", "Tokyo", "Kyoto",
+                             "Hiroshima", "Niigata", "Naha",
+                             "Nagasaki", "Sendai", "Hakodate")) %>%
+  select(station_name, longitude, latitude)
+```
+
+```{r animation-add-cities}
+p <- ggplot() +
+  borders(regions = "Japan",
+          fill = "grey95",
+          colour = "grey80") +
+  geom_point(data = sakura_labels,
+             aes(longitude, latitude),
+             size = 1) +
+  geom_text(data = sakura_labels,
+            aes(longitude, latitude, label = station_name),
+            hjust = -0.2,
+            vjust = 1) +
+  geom_point(data = sakura_overall,
+             aes(longitude, latitude)) +
+  coord_map() +
+  theme_map() +
+  transition_events(start = flower_doy,
+                    end = full_bloom_doy,
+                    enter_length = 5,
+                    exit_length = 5) +
+  ggtitle("Day of year: {round(frame_time, 0)}")
+
+animate(p, start_pause = 20, end_pause = 20)
+```
+
+```{r animation-add-sakura-image}
+p <- ggplot() +
+  borders(regions = "Japan",
+          fill = "grey95",
+          colour = "grey80") +
+  geom_point(data = sakura_labels,
+             aes(longitude, latitude),
+             size = 1) +
+  geom_text(data = sakura_labels,
+            aes(longitude, latitude, label = station_name),
+            hjust = -0.2,
+            vjust = 1) +
+  geom_image(data = sakura_overall,
+             aes(longitude, latitude, image = "sakura-no-border.svg"),
+             size = 0.03) +
+  coord_map() +
+  theme_map() +
+  transition_events(start = flower_doy,
+                    end = full_bloom_doy,
+                    enter_length = 5,
+                    exit_length = 5) +
+  ggtitle("Day of year: {round(frame_time, 0)}")
+
+animate(p, start_pause = 20, end_pause = 20)
+```
+
+```{r animation-convert-to-date-label}
+p <- ggplot() +
+  borders(regions = "Japan",
+          fill = "grey95",
+          colour = "grey80") +
+  geom_point(data = sakura_labels,
+             aes(longitude, latitude),
+             size = 1) +
+  geom_text(data = sakura_labels,
+            aes(longitude, latitude, label = station_name),
+            hjust = -0.2,
+            vjust = 1) +
+  geom_image(data = sakura_overall,
+             aes(longitude, latitude, image = "sakura-no-border.svg"),
+             size = 0.03) +
+  coord_map() +
+  theme_map() +
+  transition_events(start = flower_doy,
+                    end = full_bloom_doy,
+                    enter_length = 5,
+                    exit_length = 5) +
+  ggtitle("{paste(month(ymd(\"2019-01-01\") + frame_time, label = TRUE, abbr = FALSE),
+                  day(ymd(\"2019-01-01\") + frame_time))}")
+
+animate(p, start_pause = 20, end_pause = 20)
+```
+
+```{r animation-change-font}
+p <- ggplot() +
+  borders(regions = "Japan",
+          fill = "grey95",
+          colour = "grey80") +
+  geom_point(data = sakura_labels,
+             aes(longitude, latitude),
+             size = 1) +
+  geom_text(data = sakura_labels,
+            aes(longitude, latitude, label = station_name),
+            family = "Manga Temple",
+            hjust = -0.2,
+            vjust = 1) +
+  geom_image(data = sakura_overall,
+             aes(longitude, latitude, image = "sakura-no-border.svg"),
+             size = 0.03) +
+  coord_map() +
+  theme_map() +
+  transition_events(start = flower_doy,
+                    end = full_bloom_doy,
+                    enter_length = 5,
+                    exit_length = 5) +
+  ggtitle("{paste(month(ymd(\"2019-01-01\") + frame_time, label = TRUE, abbr = FALSE),
+                  day(ymd(\"2019-01-01\") + frame_time))}") +
+  theme(text = element_text(family = "Manga Temple"))
+
+animate(p, start_pause = 20, end_pause = 20)
+```
+
+```{r animation-change-colour}
+p <- ggplot() +
+  borders(regions = "Japan",
+          fill = "#AA9C8F",
+          colour = NA) +
+  geom_point(data = sakura_labels,
+             aes(longitude, latitude),
+             size = 1,
+             colour = "#3D1308") +
+  geom_text(data = sakura_labels,
+            aes(longitude, latitude, label = station_name),
+            colour = "#3D1308",
+            family = "Manga Temple",
+            hjust = -0.2,
+            vjust = 1) +
+  geom_image(data = sakura_overall,
+             aes(longitude, latitude, image = "sakura-no-border.svg"),
+             size = 0.03) +
+  coord_map() +
+  theme_map() +
+  transition_events(start = flower_doy,
+                    end = full_bloom_doy,
+                    enter_length = 5,
+                    exit_length = 5) +
+  labs(title = "{paste(month(ymd(\"2019-01-01\") + frame_time, label = TRUE, abbr = FALSE),
+                  day(ymd(\"2019-01-01\") + frame_time))}") +
+  theme(text = element_text(family = "Manga Temple", colour = "#3D1308"),
+        panel.border = element_blank(),
+        panel.background = element_blank(),
+        plot.background = element_rect(fill = "#FFF9F3", colour = NA))
+
+animate(p, start_pause = 20, end_pause = 20)
+```
+
+```{r animation-add-title}
+p <- ggplot() +
+  borders(regions = "Japan",
+          fill = "#AA9C8F",
+          colour = NA) +
+  geom_point(data = sakura_labels,
+             aes(longitude, latitude),
+             size = 1,
+             colour = "#3D1308") +
+  geom_text(data = sakura_labels,
+            aes(longitude, latitude, label = station_name),
+            colour = "#3D1308",
+            family = "Manga Temple",
+            hjust = -0.2,
+            vjust = 1) +
+  geom_image(data = sakura_overall,
+             aes(longitude, latitude, image = "sakura-no-border.svg"),
+             size = 0.03) +
+  coord_map() +
+  theme_map() +
+  transition_events(start = flower_doy,
+                    end = full_bloom_doy,
+                    enter_length = 5,
+                    exit_length = 5) +
+  labs(title = "When do cherry blossoms bloom in Japan?",
+  subtitle = paste("Hanami (\"flower viewing\") is a Japanese tradition over 1,000 years old, usually associated with",
+                     "cherry blossom trees. The sakura zensen (cherry blossom front) shows the typical date of",
+                     "flowering and full bloom across Japan.",
+                     "\n"),
+                     sep = "\n",
+  caption = "{paste(month(ymd(\"2019-01-01\") + frame_time, label = TRUE, abbr = FALSE),
+                  day(ymd(\"2019-01-01\") + frame_time))}") +
+  theme(panel.border = element_blank(),
+        panel.background = element_blank(),
+        plot.background = element_rect(fill = "#FFF9F3", colour = NA),
+        plot.title = element_textbox_simple(family = "Manga Temple", colour = "#3D1308"),
+        plot.subtitle = element_textbox_simple(family = "Manga Temple", colour = "#3D1308"),
+        plot.caption = element_text(family = "Manga Temple", colour = "#3D1308"))
+
+animate(p, start_pause = 20, end_pause = 20)
+```
+
+```{r animation-adjust-title-size-location}
+p <- ggplot() +
+  borders(regions = "Japan",
+          fill = "#AA9C8F",
+          colour = NA) +
+  geom_point(data = sakura_labels,
+             aes(longitude, latitude),
+             size = 1,
+             colour = "#3D1308") +
+  geom_text(data = sakura_labels,
+            aes(longitude, latitude, label = station_name),
+            colour = "#3D1308",
+            family = "Manga Temple",
+            hjust = -0.2,
+            vjust = 1) +
+  geom_image(data = sakura_overall,
+             aes(longitude, latitude, image = "sakura-no-border.svg"),
+             size = 0.028) +
+  coord_map() +
+  theme_map() +
+  transition_events(start = flower_doy - 3,
+                    end = full_bloom_doy,
+                    range(0, 151),
+                    enter_length = 6,
+                    exit_length = 6) +
+  enter_grow() +
+  exit_drift(y_mod = -1) +
+  exit_shrink() +
+  labs(title = "When do cherry blossoms bloom in Japan?",
+  subtitle = paste("Hanami (\"flower viewing\") is a Japanese tradition over 1,000 years old, usually associated with",
+                     "cherry blossom trees. The sakura zensen (cherry blossom front) shows the typical date of",
+                     "flowering and full bloom across Japan.",
+                     "\n"),
+                     sep = "\n",
+  caption = "{paste(month(ymd(\"2019-01-01\") + frame_time, label = TRUE, abbr = FALSE),
+                  day(ymd(\"2019-01-01\") + frame_time))}") +
+  theme(panel.border = element_blank(),
+        panel.background = element_blank(),
+        plot.background = element_rect(fill = "#FFF9F3", colour = NA),
+        plot.margin = margin(10, 50, 10, 50),
+        plot.title = element_textbox_simple(family = "Manga Temple", colour = "#3D1308",
+                                            halign = 0.5, margin = margin(10, 10, 10, 10)),
+        plot.subtitle = element_textbox_simple(family = "Manga Temple", colour = "#3D1308", halign = 0.5),
+        plot.caption = element_text(family = "Manga Temple", colour = "#3D1308"))
+
+animate(p, start_pause = 20, end_pause = 20)
+```
+
+```{r animation-add-colour-to-title}
+p <- ggplot() +
+  borders(regions = "Japan",
+          fill = "#AA9C8F",
+          colour = NA) +
+  geom_point(data = sakura_labels,
+             aes(longitude, latitude),
+             size = 1,
+             colour = "#3D1308") +
+  geom_text(data = sakura_labels,
+            aes(longitude, latitude, label = station_name),
+            colour = "#3D1308",
+            family = "Manga Temple",
+            hjust = -0.2,
+            vjust = 1) +
+  geom_image(data = sakura_overall,
+             aes(longitude, latitude, image = "sakura-no-border.svg"),
+             size = 0.028) +
+  coord_map() +
+  theme_map() +
+  transition_events(start = flower_doy - 3,
+                    end = full_bloom_doy,
+                    range(0, 151),
+                    enter_length = 6,
+                    exit_length = 6) +
+  enter_grow() +
+  exit_drift(y_mod = -1) +
+  exit_shrink() +
+  labs(title = "When do <span style = 'color:#D47FA8'>**cherry blossoms**</span> bloom in Japan?",
+  subtitle = paste("<span style = 'color:#D47FA8'>**Hanami**</span> (\"flower viewing\") is a Japanese tradition over 1,000 years old, usually associated with",
+                     "cherry blossom trees. The <span style = 'color:#D47FA8'>**sakura zensen**</span> (cherry blossom front) shows the typical date of",
+                     "flowering and full bloom across Japan.",
+                     "\n"),
+                     sep = "\n",
+  caption = "{paste(month(ymd(\"2019-01-01\") + frame_time, label = TRUE, abbr = FALSE),
+                  day(ymd(\"2019-01-01\") + frame_time))}") +
+  theme(panel.border = element_blank(),
+        panel.background = element_blank(),
+        plot.background = element_rect(fill = "#FFF9F3", colour = NA),
+        plot.margin = margin(10, 50, 10, 50),
+        plot.title = element_textbox_simple(size = 11, family = "Manga Temple", colour = "#3D1308",
+                                            halign = 0.5, margin = margin(10, 10, 10, 10)),
+        plot.subtitle = element_textbox_simple(size = 8, family = "Manga Temple", colour = "#3D1308", halign = 0.5),
+        plot.caption = element_text(size = 14, family = "Manga Temple", colour = "#3D1308"))
+
+animate(p, start_pause = 20, end_pause = 20)
+```
+
+
+
+```{r final-for-now-animation-brown}
+p <- ggplot() +
+  borders(regions = "Japan",
+          fill = "#AA9C8F",
+          colour = NA) +
+  geom_point(data = sakura_labels,
+             aes(longitude, latitude),
+             size = 2,
+             colour = "#3D1308") +
+  geom_text(data = sakura_labels,
+            aes(longitude, latitude, label = station_name),
+            size = 8,
+            colour = "#3D1308",
+            family = "Manga Temple",
+            hjust = -0.2,
+            vjust = 1) +
+  geom_image(data = sakura_overall,
+             aes(longitude, latitude, image = "sakura-no-border.svg"),
+             size = 0.028) +
+  coord_map() +
+  theme_map() +
+  transition_events(start = flower_doy - 3,
+                    end = full_bloom_doy,
+                    range(0, 151),
+                    enter_length = 6,
+                    exit_length = 6) +
+  enter_grow() +
+  exit_drift(y_mod = -1) +
+  exit_shrink() +
+  labs(title = "When do <span style = 'color:#D47FA8'>**cherry blossoms**</span> bloom in Japan?",
+  subtitle = paste("<span style = 'color:#D47FA8'>**Hanami**</span> (\"flower viewing\") is a Japanese tradition over 1,000 years old, usually associated with",
+                     "cherry blossom trees. The <span style = 'color:#D47FA8'>**sakura zensen**</span> (cherry blossom front) shows the typical date of",
+                     "flowering and full bloom across Japan.",
+                     "\n"),
+                     sep = "\n",
+  caption = "{paste(month(ymd(\"2019-01-01\") + frame_time, label = TRUE, abbr = FALSE),
+                  day(ymd(\"2019-01-01\") + frame_time))}") +
+  theme(panel.border = element_blank(),
+        panel.background = element_blank(),
+        plot.background = element_rect(fill = "#FFF9F3", colour = NA),
+        plot.margin = margin(10, 50, 10, 50),
+        plot.title = element_textbox_simple(size = 32, family = "Manga Temple", colour = "#3D1308",
+                                            halign = 0.5, margin = margin(10, 10, -40, 10)),
+        plot.subtitle = element_textbox_simple(size = 20, family = "Manga Temple", colour = "#3D1308", halign = 0.5),
+        plot.caption = element_text(size = 32, family = "Manga Temple", colour = "#3D1308"))
+
+anim <- animate(p, nframes = 151 * 2, start_pause = 15, end_pause = 15, height = 1600, width = 1100)
+
+anim_save("sakura-front-brown.gif", animation = anim)
+```
+
+```{r}
+ggplot() +
+  borders(regions = "Japan",
+          fill = "#AA9C8F",
+          colour = NA) +
+  geom_point(data = sakura_labels,
+             aes(longitude, latitude),
+             size = 2,
+             colour = "#3D1308") +
+  geom_text(data = sakura_labels,
+            aes(longitude, latitude, label = station_name),
+            size = 3,
+            colour = "#3D1308",
+            family = "Manga Temple",
+            hjust = -0.2,
+            vjust = 1) +
+  geom_image(data = sakura_overall,
+             aes(longitude, latitude, image = "sakura-no-border.svg"),
+             size = 0.028) +
+  coord_map() +
+  theme_map() +
+  labs(title = "When do <span style = 'color:#D47FA8'>**cherry blossoms**</span> bloom in Japan?",
+  subtitle = paste("<span style = 'color:#D47FA8'>**Hanami**</span> (\"flower viewing\") is a Japanese tradition over 1,000 years old, usually associated with",
+                     "cherry blossom trees. Shown here is the <span style = 'color:#D47FA8'>**sakura zensen**</span> (cherry blossom front), the typical date of",
+                     "flowering and full bloom across Japan.",
+                     "\n"),
+                     sep = "\n",
+  caption = "January 17") +
+  theme(panel.border = element_blank(),
+        panel.background = element_blank(),
+        plot.background = element_rect(fill = "#FFF9F3", colour = NA),
+        plot.margin = margin(10, 50, 10, 50),
+        plot.title = element_textbox_simple(size = 12, family = "Manga Temple", colour = "#3D1308", halign = 0.5,
+                                            margin = margin(10, 10, -20, 10)),
+        plot.subtitle = element_textbox_simple(size = 8, family = "Manga Temple", colour = "#3D1308", halign = 0.5),
+        plot.caption = element_text(size = 12, family = "Manga Temple", colour = "#3D1308"))
+```
+
+
+### Notes
+
+Manga Temple font from https://www.dafont.com/manga-temple.font by Blambot (https://blambot.com/)
+
