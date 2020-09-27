@@ -76,7 +76,11 @@ ggplot() +
 
 
 
-Add title
+Add title.
+
+You can add a dynamic label to show the stage of your animation. For `transition_events()`, we use `frame_time`, which shows the day of year, since that is the scale we have for our `start` and `end` arguments in `transition_events()`. (Other transition types have different dynamic labels.)
+
+We wrap `frame_time` in curly braces, along with a `round()` function to get it to the nearest integer.
 
 ```{r animation-points-only-add-title}
 ggplot() +
@@ -92,7 +96,7 @@ ggplot() +
 
 Add pauses at beginning and end.
 
-We are now assigning the plot to an object `p`, then using `p` as the first argument in the `animate()` function, which lets us tweak things like start and end pauses.
+We are now assigning the plot to an object `p`, then using `p` as the first argument in the `animate()` function, which lets us tweak things like start and end pauses. Here, we'll add a pause of 20 frames to the start and end, which translates to 2 seconds with the `animate()` function's default of 10 frames per second (FPS)
 
 ```{r animation-points-only-add-pauses}
 p <- ggplot() +
@@ -107,9 +111,16 @@ p <- ggplot() +
 animate(p, start_pause = 20, end_pause = 20)
 ```
 
+
+Add borders of Japan.
+
+This is an animated map, so borders will be useful reference point! `ggplot2` has its own `borders()` function, which draws basic borders for common entities like countries or continents. In our case, we'll use Japan. We'll also set the `fill` and `colour` so that we have a grey theme. A bit bland, but we'll change the colours later.
+
 ```{r animation-add-borders}
 p <- ggplot() +
-  borders(regions = "Japan") +
+  borders(regions = "Japan",
+          fill = "grey95",
+          colour = "grey80") +
   geom_point(data = sakura_overall,
              aes(longitude, latitude)) +
   transition_events(start = flower_doy,
@@ -120,6 +131,12 @@ p <- ggplot() +
 
 animate(p, start_pause = 20, end_pause = 20)
 ```
+
+
+Use map theming.
+
+`coord_map()` does blah blah
+`theme_map()` does yadda-yadda
 
 ```{r animation-add-map-coord-and-theme}
 p <- ggplot() +
@@ -138,6 +155,15 @@ p <- ggplot() +
 
 animate(p, start_pause = 20, end_pause = 20)
 ```
+
+
+Add cities as additional reference points.
+
+- Create an vector of cities we want to label (city name == station_name), along with longitude and latitude
+- Add tiny points for city markers
+- Add city labels next to those points
+
+Here we specify different `data` arguments in our `geom_*()` functions: vector of city labels we just created and the original data frame of sakura timing.
 
 ```{r city-labels}
 sakura_labels <- sakura_overall %>%
@@ -172,6 +198,13 @@ p <- ggplot() +
 animate(p, start_pause = 20, end_pause = 20)
 ```
 
+At this point, the animation is basically done! From here, we are tweaking to make it clearer for the our audience and make it look nice.
+
+
+First thing we'll do is replace the points representing flower and bloom dates with a sakura icon. I bought mine from iconfinder.com, but you can find free, open-license icons out there.
+
+To do this, we'll use the `{ggimage}` package, which adds `geom_image()`. This acts just like `geom_point()`, except we can point it to an image file and it will display that instead of a point.
+
 ```{r animation-add-sakura-image}
 p <- ggplot() +
   borders(regions = "Japan",
@@ -197,6 +230,11 @@ p <- ggplot() +
 
 animate(p, start_pause = 20, end_pause = 20)
 ```
+
+
+Convert day of year to calendar date.
+
+
 
 ```{r animation-convert-to-date-label}
 p <- ggplot() +
