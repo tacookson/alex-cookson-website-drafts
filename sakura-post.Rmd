@@ -125,7 +125,7 @@ p <- ggplot() +
                     exit_length = 5) +
   ggtitle("Day of year: {round(frame_time, 0)}")
 
-animate(p, start_pause = 20, end_pause = 20)
+animate(p, start_pause = 15, end_pause = 15)
 ```
 
 
@@ -146,7 +146,7 @@ p <- ggplot() +
                     exit_length = 5) +
   ggtitle("Day of year: {round(frame_time, 0)}")
 
-animate(p, start_pause = 20, end_pause = 20)
+animate(p, start_pause = 15, end_pause = 15)
 ```
 
 
@@ -170,7 +170,7 @@ p <- ggplot() +
                     exit_length = 5) +
   ggtitle("Day of year: {round(frame_time, 0)}")
 
-animate(p, start_pause = 20, end_pause = 20)
+animate(p, start_pause = 15, end_pause = 15)
 ```
 
 
@@ -212,7 +212,7 @@ p <- ggplot() +
                     exit_length = 5) +
   ggtitle("Day of year: {round(frame_time, 0)}")
 
-animate(p, start_pause = 20, end_pause = 20)
+animate(p, start_pause = 15, end_pause = 15)
 ```
 
 At this point, the animation is basically done! From here, we are tweaking to make it clearer for the our audience and make it look nice.
@@ -246,7 +246,7 @@ p <- ggplot() +
                     exit_length = 5) +
   ggtitle("Day of year: {round(frame_time, 0)}")
 
-animate(p, start_pause = 20, end_pause = 20)
+animate(p, start_pause = 15, end_pause = 15)
 ```
 
 
@@ -259,7 +259,7 @@ We want to convert day of year into a simple calendar date, like "January 1" or 
 - Converting day of year into date by adding the `frame_time`, which uses day of the year, to a "base date". Here, we use "2019-01-01". We need a year because date objects need to be a specific date, which requires year. And we use 2019 -- instead of 2020, when this post was written -- because 2020 is a leap year and we don't to include that extra day in February.
 - Converting that date into a format that shows only month and day (technically, the labels are in 2019, but we're just hiding the year so that we get a more generic calendar date)
 
-```{r animation-convert-to-date-label}
+```{r animation-convert-to-date}
 p <- ggplot() +
   borders(regions = "Japan",
           fill = "grey95",
@@ -282,10 +282,10 @@ p <- ggplot() +
                     exit_length = 5) +
   ggtitle("{ymd(\"2019-01-01\") + frame_time}")
 
-animate(p, start_pause = 20, end_pause = 20)
+animate(p, start_pause = 15, end_pause = 15)
 ```
 
-```{r animation-convert-to-date-label}
+```{r animation-convert-to-date-no-year}
 p <- ggplot() +
   borders(regions = "Japan",
           fill = "grey95",
@@ -309,7 +309,7 @@ p <- ggplot() +
   ggtitle("{paste(month(ymd(\"2019-01-01\") + frame_time, label = TRUE, abbr = FALSE),
                   day(ymd(\"2019-01-01\") + frame_time))}")
 
-animate(p, start_pause = 20, end_pause = 20)
+animate(p, start_pause = 15, end_pause = 15)
 ```
 
 
@@ -343,7 +343,7 @@ p <- ggplot() +
                   day(ymd(\"2019-01-01\") + frame_time))}") +
   theme(text = element_text(family = "Manga Temple"))
 
-animate(p, start_pause = 20, end_pause = 20)
+animate(p, start_pause = 15, end_pause = 15)
 ```
 
 
@@ -380,8 +380,94 @@ p <- ggplot() +
         panel.background = element_blank(),
         plot.background = element_rect(fill = "#FFF9F3", colour = NA))
 
-animate(p, start_pause = 20, end_pause = 20)
+animate(p, start_pause = 15, end_pause = 15)
 ```
+
+
+
+Add growing/shrinking sakura.
+
+```{r add-growing-shrinking-transition}
+p <- ggplot() +
+  borders(regions = "Japan",
+          fill = "#AA9C8F",
+          colour = NA) +
+  geom_point(data = sakura_labels,
+             aes(longitude, latitude),
+             size = 1,
+             colour = "#3D1308") +
+  geom_text(data = sakura_labels,
+            aes(longitude, latitude, label = station_name),
+            colour = "#3D1308",
+            family = "Manga Temple",
+            hjust = -0.2,
+            vjust = 1) +
+  geom_image(data = sakura_overall,
+             aes(longitude, latitude, image = "sakura-no-border.svg"),
+             size = 0.03) +
+  coord_map() +
+  theme_map() +
+  transition_events(start = flower_doy - 3,
+                    end = full_bloom_doy,
+                    range(0, 151),
+                    enter_length = 6,
+                    exit_length = 6) +
+  enter_grow() +
+  exit_drift(y_mod = -1) +
+  exit_shrink() +
+  labs(title = "{paste(month(ymd(\"2019-01-01\") + frame_time, label = TRUE, abbr = FALSE),
+                  day(ymd(\"2019-01-01\") + frame_time))}") +
+  theme(text = element_text(family = "Manga Temple", colour = "#3D1308"),
+        panel.border = element_blank(),
+        panel.background = element_blank(),
+        plot.background = element_rect(fill = "#FFF9F3", colour = NA))
+
+animate(p, start_pause = 15, end_pause = 15)
+```
+
+
+
+Slow overall animation speed.
+
+```{r}
+p <- ggplot() +
+  borders(regions = "Japan",
+          fill = "#AA9C8F",
+          colour = NA) +
+  geom_point(data = sakura_labels,
+             aes(longitude, latitude),
+             size = 1,
+             colour = "#3D1308") +
+  geom_text(data = sakura_labels,
+            aes(longitude, latitude, label = station_name),
+            colour = "#3D1308",
+            family = "Manga Temple",
+            hjust = -0.2,
+            vjust = 1) +
+  geom_image(data = sakura_overall,
+             aes(longitude, latitude, image = "sakura-no-border.svg"),
+             size = 0.03) +
+  coord_map() +
+  theme_map() +
+  transition_events(start = flower_doy - 3,
+                    end = full_bloom_doy,
+                    range(0, 151),
+                    enter_length = 6,
+                    exit_length = 6) +
+  enter_grow() +
+  exit_drift(y_mod = -1) +
+  exit_shrink() +
+  labs(title = "{paste(month(ymd(\"2019-01-01\") + frame_time, label = TRUE, abbr = FALSE),
+                  day(ymd(\"2019-01-01\") + frame_time))}") +
+  theme(text = element_text(family = "Manga Temple", colour = "#3D1308"),
+        panel.border = element_blank(),
+        panel.background = element_blank(),
+        plot.background = element_rect(fill = "#FFF9F3", colour = NA))
+
+animate(p, nframes = 151 * 2, start_pause = 15, end_pause = 15)
+```
+
+
 
 
 Add title.
@@ -408,10 +494,14 @@ p <- ggplot() +
              size = 0.03) +
   coord_map() +
   theme_map() +
-  transition_events(start = flower_doy,
+  transition_events(start = flower_doy - 3,
                     end = full_bloom_doy,
-                    enter_length = 5,
-                    exit_length = 5) +
+                    range(0, 151),
+                    enter_length = 6,
+                    exit_length = 6) +
+  enter_grow() +
+  exit_drift(y_mod = -1) +
+  exit_shrink() +
   labs(title = "When do cherry blossoms bloom in Japan?",
   subtitle = paste("Hanami (\"flower viewing\") is a Japanese tradition over 1,000 years old, usually associated with",
                      "cherry blossom trees. The sakura zensen (cherry blossom front) shows the typical date of",
@@ -427,12 +517,10 @@ p <- ggplot() +
         plot.subtitle = element_textbox_simple(family = "Manga Temple", colour = "#3D1308"),
         plot.caption = element_text(family = "Manga Temple", colour = "#3D1308"))
 
-animate(p, start_pause = 20, end_pause = 20)
+animate(p, nframes = 151 * 2, start_pause = 15, end_pause = 15)
 ```
 
 
-
-### NOTE FOR ME: THIS STEP ALSO ADJUSTS THE TIMING OF TRANSITIONS AND ADDS THE GROWING/SHRINKING SAKURA. NEED TO SPLIT THIS OUT INTO SEPARATE STEPS.
 
 Adjust title size and location.
 
@@ -483,7 +571,7 @@ p <- ggplot() +
         plot.subtitle = element_textbox_simple(family = "Manga Temple", colour = "#3D1308", halign = 0.5),
         plot.caption = element_text(family = "Manga Temple", colour = "#3D1308"))
 
-animate(p, start_pause = 20, end_pause = 20)
+animate(p, nframes = 151 * 2, start_pause = 15, end_pause = 15)
 ```
 
 
@@ -537,7 +625,7 @@ p <- ggplot() +
         plot.subtitle = element_textbox_simple(size = 8, family = "Manga Temple", colour = "#3D1308", halign = 0.5),
         plot.caption = element_text(size = 14, family = "Manga Temple", colour = "#3D1308"))
 
-animate(p, start_pause = 20, end_pause = 20)
+animate(p, nframes = 151 * 2, start_pause = 15, end_pause = 15)
 ```
 
 
@@ -590,43 +678,6 @@ p <- ggplot() +
 
 anim <- animate(p, nframes = 151 * 2, start_pause = 15, end_pause = 15, height = 1600, width = 1100)
 
-anim_save("sakura-front-brown.gif", animation = anim)
-```
-
-```{r}
-ggplot() +
-  borders(regions = "Japan",
-          fill = "#AA9C8F",
-          colour = NA) +
-  geom_point(data = sakura_labels,
-             aes(longitude, latitude),
-             size = 2,
-             colour = "#3D1308") +
-  geom_text(data = sakura_labels,
-            aes(longitude, latitude, label = station_name),
-            size = 3,
-            colour = "#3D1308",
-            family = "Manga Temple",
-            hjust = -0.2,
-            vjust = 1) +
-  geom_image(data = sakura_overall,
-             aes(longitude, latitude, image = "sakura-no-border.svg"),
-             size = 0.028) +
-  coord_map() +
-  theme_map() +
-  labs(title = "When do <span style = 'color:#D47FA8'>**cherry blossoms**</span> bloom in Japan?",
-  subtitle = paste("<span style = 'color:#D47FA8'>**Hanami**</span> (\"flower viewing\") is a Japanese tradition over 1,000 years old, usually associated with",
-                     "cherry blossom trees. Shown here is the <span style = 'color:#D47FA8'>**sakura zensen**</span> (cherry blossom front), the typical date of",
-                     "flowering and full bloom across Japan.",
-                     "\n"),
-                     sep = "\n",
-  caption = "January 17") +
-  theme(panel.border = element_blank(),
-        panel.background = element_blank(),
-        plot.background = element_rect(fill = "#FFF9F3", colour = NA),
-        plot.margin = margin(10, 50, 10, 50),
-        plot.title = element_textbox_simple(size = 12, family = "Manga Temple", colour = "#3D1308", halign = 0.5,
-                                            margin = margin(10, 10, -20, 10)),
-        plot.subtitle = element_textbox_simple(size = 8, family = "Manga Temple", colour = "#3D1308", halign = 0.5),
-        plot.caption = element_text(size = 12, family = "Manga Temple", colour = "#3D1308"))
+### Save animation
+### anim_save("sakura-front-brown.gif", animation = anim)
 ```
