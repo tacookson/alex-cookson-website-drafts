@@ -5,7 +5,9 @@ date: "11/07/2020"
 output: html_document
 ---
 
-Title: Building an animation step-by-step with cherry blossoms
+Title: Building an animation step-by-step with cherry blossoms.
+
+What you should know: how to build a scatterplot using `ggplot2`, add labels using `labs()`, and make *basic* adjustments to a graph's look using `theme()`.
 
 Reference Katherine Goode's great presentation: https://goodekat.github.io/presentations/2019-isugg-gganimate-spooky/slides.html#1
 
@@ -63,7 +65,7 @@ First, we'll set up the basic animation, with points appearing and disappearing 
 To do this we use the `transition_events()` function, which lets individual points stay on-screen for different periods of time. We need to specify 4 arguments:
 
 - `start` and `end` specify when in the timeline we're creating the points appear and disappear
-- `enter_length` and `exit_length` specify how long the points have to appear and disappear. These values aren't too important right now because we haven't specified the *type* of transition, so the points are appearing and disappearing instantly. But they'll become important when we start polishing our animation. The numbers use the same scale as the data, so the code below gives each point 5 days to appear and disappear.
+- `enter_length` and `exit_length` specify how long the points have to appear and disappear. These values aren't too important right now because we haven't specified the *type* of transition, so the points are appearing and disappearing instantly. But they'll become important when we start polishing our animation. The numbers use the same scale as the data, so the code below gives each point 5 days to appear and disappear. Why 5 days? No reason -- we just need to choose something and five is a nice enough number.
 
 ```{r animation-points-only}
 ggplot() +
@@ -91,10 +93,12 @@ ggplot() +
                     end = full_bloom_doy,
                     enter_length = 5,
                     exit_length = 5) +
-  ggtitle("Day of year: {frame_time}")
+  labs(title = "Day of year: {frame_time}")
 ```
 
-Having day of year to over 10 decimal points of accuracy is overkill, though. Let's change the call we make to `frame_time` in the curly braces to round to the nearest integer.
+
+
+Having day of year to over 10 decimal points of accuracy is overkill, though. Fortunately, `frame_time` acts like any other variable: we can apply code it to change it. So let's change the call we make to `frame_time` in the curly braces to round to the nearest integer.
 
 ```{r animation-points-only-add-title-rounded}
 ggplot() +
@@ -104,7 +108,7 @@ ggplot() +
                     end = full_bloom_doy,
                     enter_length = 5,
                     exit_length = 5) +
-  ggtitle("Day of year: {round(frame_time, 0)}")
+  labs(title = "Day of year: {round(frame_time, 0)}")
 ```
 
 Much better!
@@ -123,7 +127,7 @@ p <- ggplot() +
                     end = full_bloom_doy,
                     enter_length = 5,
                     exit_length = 5) +
-  ggtitle("Day of year: {round(frame_time, 0)}")
+  labs(title = "Day of year: {round(frame_time, 0)}")
 
 animate(p, start_pause = 15, end_pause = 15)
 ```
@@ -137,14 +141,14 @@ This is an animated map, so borders will be useful reference point! `ggplot2` ha
 p <- ggplot() +
   borders(regions = "Japan",
           fill = "grey95",
-          colour = "grey80") +
+          colour = "grey50") +
   geom_point(data = sakura_overall,
              aes(longitude, latitude)) +
   transition_events(start = flower_doy,
                     end = full_bloom_doy,
                     enter_length = 5,
                     exit_length = 5) +
-  ggtitle("Day of year: {round(frame_time, 0)}")
+  labs(title = "Day of year: {round(frame_time, 0)}")
 
 animate(p, start_pause = 15, end_pause = 15)
 ```
@@ -152,14 +156,14 @@ animate(p, start_pause = 15, end_pause = 15)
 
 Use map theming.
 
-`coord_map()` does blah blah
-`theme_map()` does yadda-yadda
+`coord_map()` translates geographic coordinates into a map projection
+`theme_map()` is a clean theme that's good for maps -- eliminates a lot of the excess plot elements (e.g., gridlines, axis text)
 
 ```{r animation-add-map-coord-and-theme}
 p <- ggplot() +
   borders(regions = "Japan",
           fill = "grey95",
-          colour = "grey80") +
+          colour = "grey50") +
   geom_point(data = sakura_overall,
              aes(longitude, latitude)) +
   coord_map() +
@@ -168,7 +172,7 @@ p <- ggplot() +
                     end = full_bloom_doy,
                     enter_length = 5,
                     exit_length = 5) +
-  ggtitle("Day of year: {round(frame_time, 0)}")
+  labs(title = "Day of year: {round(frame_time, 0)}")
 
 animate(p, start_pause = 15, end_pause = 15)
 ```
@@ -188,13 +192,17 @@ sakura_labels <- sakura_overall %>%
                              "Hiroshima", "Niigata", "Naha",
                              "Nagasaki", "Sendai", "Hakodate")) %>%
   select(station_name, longitude, latitude)
+
+sakura_labels %>%
+  kable(format = "html") %>%
+  kable_styling()
 ```
 
 ```{r animation-add-cities}
 p <- ggplot() +
   borders(regions = "Japan",
           fill = "grey95",
-          colour = "grey80") +
+          colour = "grey50") +
   geom_point(data = sakura_labels,
              aes(longitude, latitude),
              size = 1) +
@@ -210,7 +218,7 @@ p <- ggplot() +
                     end = full_bloom_doy,
                     enter_length = 5,
                     exit_length = 5) +
-  ggtitle("Day of year: {round(frame_time, 0)}")
+  labs(title = "Day of year: {round(frame_time, 0)}")
 
 animate(p, start_pause = 15, end_pause = 15)
 ```
@@ -223,11 +231,13 @@ First thing we'll do is replace the points representing flower and bloom dates w
 
 To do this, we'll use the `{ggimage}` package, which adds `geom_image()`. This acts just like `geom_point()`, except we can point it to an image file and it will display that instead of a point.
 
+I had to do a bunch of fiddling to get the size the way I wanted it.
+
 ```{r animation-add-sakura-image}
 p <- ggplot() +
   borders(regions = "Japan",
           fill = "grey95",
-          colour = "grey80") +
+          colour = "grey50") +
   geom_point(data = sakura_labels,
              aes(longitude, latitude),
              size = 1) +
@@ -244,7 +254,7 @@ p <- ggplot() +
                     end = full_bloom_doy,
                     enter_length = 5,
                     exit_length = 5) +
-  ggtitle("Day of year: {round(frame_time, 0)}")
+  labs(title = "Day of year: {round(frame_time, 0)}")
 
 animate(p, start_pause = 15, end_pause = 15)
 ```
@@ -263,7 +273,7 @@ We want to convert day of year into a simple calendar date, like "January 1" or 
 p <- ggplot() +
   borders(regions = "Japan",
           fill = "grey95",
-          colour = "grey80") +
+          colour = "grey50") +
   geom_point(data = sakura_labels,
              aes(longitude, latitude),
              size = 1) +
@@ -280,7 +290,7 @@ p <- ggplot() +
                     end = full_bloom_doy,
                     enter_length = 5,
                     exit_length = 5) +
-  ggtitle("{ymd(\"2019-01-01\") + frame_time}")
+  labs(title = "{ymd(\"2019-01-01\") + frame_time}")
 
 animate(p, start_pause = 15, end_pause = 15)
 ```
@@ -289,7 +299,7 @@ animate(p, start_pause = 15, end_pause = 15)
 p <- ggplot() +
   borders(regions = "Japan",
           fill = "grey95",
-          colour = "grey80") +
+          colour = "grey50") +
   geom_point(data = sakura_labels,
              aes(longitude, latitude),
              size = 1) +
@@ -306,7 +316,7 @@ p <- ggplot() +
                     end = full_bloom_doy,
                     enter_length = 5,
                     exit_length = 5) +
-  ggtitle("{paste(month(ymd(\"2019-01-01\") + frame_time, label = TRUE, abbr = FALSE),
+  labs(title = "{paste(month(ymd(\"2019-01-01\") + frame_time, label = TRUE, abbr = FALSE),
                   day(ymd(\"2019-01-01\") + frame_time))}")
 
 animate(p, start_pause = 15, end_pause = 15)
@@ -321,7 +331,7 @@ I used the Manga Temple font (https://www.dafont.com/manga-temple.font) by Blamb
 p <- ggplot() +
   borders(regions = "Japan",
           fill = "grey95",
-          colour = "grey80") +
+          colour = "grey50") +
   geom_point(data = sakura_labels,
              aes(longitude, latitude),
              size = 1) +
@@ -339,7 +349,7 @@ p <- ggplot() +
                     end = full_bloom_doy,
                     enter_length = 5,
                     exit_length = 5) +
-  ggtitle("{paste(month(ymd(\"2019-01-01\") + frame_time, label = TRUE, abbr = FALSE),
+  labs(title = "{paste(month(ymd(\"2019-01-01\") + frame_time, label = TRUE, abbr = FALSE),
                   day(ymd(\"2019-01-01\") + frame_time))}") +
   theme(text = element_text(family = "Manga Temple"))
 
@@ -385,7 +395,7 @@ animate(p, start_pause = 15, end_pause = 15)
 
 
 
-Add growing/shrinking sakura.
+Add growing/shrinking sakura, using `enter_grow()` and `exit_shrink()`. Also using `exit_drift()` with its `y_mod` argument so that they "fall" and shrink simultaneously as they exit. `exit_*()` functions can be combined to get neat behaviours like this.
 
 ```{r add-growing-shrinking-transition}
 p <- ggplot() +
@@ -469,7 +479,6 @@ animate(p, nframes = 151 * 2, start_pause = 15, end_pause = 15)
 
 
 
-
 Add title.
 
 Title text and basic formatting of size, etc.
@@ -503,12 +512,12 @@ p <- ggplot() +
   exit_drift(y_mod = -1) +
   exit_shrink() +
   labs(title = "When do cherry blossoms bloom in Japan?",
-  subtitle = paste("Hanami (\"flower viewing\") is a Japanese tradition over 1,000 years old, usually associated with",
+       subtitle = paste("Hanami (\"flower viewing\") is a Japanese tradition over 1,000 years old, usually associated with",
                      "cherry blossom trees. The sakura zensen (cherry blossom front) shows the typical date of",
                      "flowering and full bloom across Japan.",
                      "\n"),
-                     sep = "\n",
-  caption = "{paste(month(ymd(\"2019-01-01\") + frame_time, label = TRUE, abbr = FALSE),
+       sep = "\n",
+       caption = "{paste(month(ymd(\"2019-01-01\") + frame_time, label = TRUE, abbr = FALSE),
                   day(ymd(\"2019-01-01\") + frame_time))}") +
   theme(panel.border = element_blank(),
         panel.background = element_blank(),
@@ -555,12 +564,12 @@ p <- ggplot() +
   exit_drift(y_mod = -1) +
   exit_shrink() +
   labs(title = "When do cherry blossoms bloom in Japan?",
-  subtitle = paste("Hanami (\"flower viewing\") is a Japanese tradition over 1,000 years old, usually associated with",
+       subtitle = paste("Hanami (\"flower viewing\") is a Japanese tradition over 1,000 years old, usually associated with",
                      "cherry blossom trees. The sakura zensen (cherry blossom front) shows the typical date of",
                      "flowering and full bloom across Japan.",
                      "\n"),
-                     sep = "\n",
-  caption = "{paste(month(ymd(\"2019-01-01\") + frame_time, label = TRUE, abbr = FALSE),
+       sep = "\n",
+       caption = "{paste(month(ymd(\"2019-01-01\") + frame_time, label = TRUE, abbr = FALSE),
                   day(ymd(\"2019-01-01\") + frame_time))}") +
   theme(panel.border = element_blank(),
         panel.background = element_blank(),
@@ -609,12 +618,12 @@ p <- ggplot() +
   exit_drift(y_mod = -1) +
   exit_shrink() +
   labs(title = "When do <span style = 'color:#D47FA8'>**cherry blossoms**</span> bloom in Japan?",
-  subtitle = paste("<span style = 'color:#D47FA8'>**Hanami**</span> (\"flower viewing\") is a Japanese tradition over 1,000 years old, usually associated with",
+       subtitle = paste("<span style = 'color:#D47FA8'>**Hanami**</span> (\"flower viewing\") is a Japanese tradition over 1,000 years old, usually associated with",
                      "cherry blossom trees. The <span style = 'color:#D47FA8'>**sakura zensen**</span> (cherry blossom front) shows the typical date of",
                      "flowering and full bloom across Japan.",
                      "\n"),
-                     sep = "\n",
-  caption = "{paste(month(ymd(\"2019-01-01\") + frame_time, label = TRUE, abbr = FALSE),
+       sep = "\n",
+       caption = "{paste(month(ymd(\"2019-01-01\") + frame_time, label = TRUE, abbr = FALSE),
                   day(ymd(\"2019-01-01\") + frame_time))}") +
   theme(panel.border = element_blank(),
         panel.background = element_blank(),
