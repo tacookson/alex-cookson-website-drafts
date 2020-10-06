@@ -1,0 +1,713 @@
+---
+title: "sakura-senzen"
+author: "Alex Cookson"
+date: '`r Sys.Date()`'
+output: html_document
+---
+
+Title: Building an animation step-by-step with cherry blossoms.
+
+What you should know: how to build a scatterplot using `ggplot2`, add labels using `labs()`, and make *basic* adjustments to a graph's look using `theme()`.
+
+Reference Katherine Goode's great presentation: https://goodekat.github.io/presentations/2019-isugg-gganimate-spooky/slides.html#1
+
+
+
+### Data preparation
+
+Goal: show the typical flowering and full-bloom dates of sakura (cherry blossom) trees in Japan. We use a dataset from (dataset provenance)
+
+```{r setup, message = FALSE}
+library(tidyverse) # Data manipulation
+library(gganimate) # Plot animation
+library(lubridate) # Working with dates
+library(ggthemes) # ggplot2 theme for maps
+library(ggimage) # Images in ggplot2 plots
+library(extrafont) # Custom fonts
+library(ggtext) # Customising text
+
+library(kableExtra) # Nice tables (only needed for blog post)
+
+sakura <- read_csv("https://raw.githubusercontent.com/tacookson/data/master/sakura-flowering/sakura-modern.csv")
+```
+
+
+
+```{r sakura-average-days}
+sakura_overall <- sakura %>%
+  # Ensure complete records for flowering and full-bloom dates
+  filter(!is.na(flower_doy),
+         !is.na(full_bloom_doy)) %>%
+  # Calculate average days of year
+  group_by(station_id, station_name, latitude, longitude) %>%
+  summarise(flower_doy = mean(flower_doy),
+            full_bloom_doy = mean(full_bloom_doy),
+            .groups = "drop")
+
+sakura_overall %>%
+  head() %>%
+  kable(format = "html") %>%
+  kable_styling()
+```
+
+We keep day-of-year for now because numbers are easier to work with than dates. We'll fix this later.
+
+
+### 1. Plot a static graph
+
+Animations show subsets of a dataset at different times, so I like to start by showing *everything* -- all the data -- in a static (i.e., non-animated) graph. That way I have an overall sense of the data I'm working with. Depending on the type of animation you're doing, this sometimes doesn't make sense. But in this case it does: we're communicating the **timing** of sakura blooms in different **places**. So let's forget the timing for now and just look at the places.
+
+```{r static-points-only}
+ggplot() +
+  geom_point(data = sakura_overall,
+             aes(longitude, latitude))
+```
+
+You can kind of make out the shape of Japan's islands. Those dots at the bottom-left are smaller islands like Okinawa.
+
+
+
+### 1.5 Simplest animation possible (transition_reveal)
+
+```{r animation-points-only}
+ggplot() +
+  geom_point(data = sakura_overall,
+             aes(longitude, latitude, group = station_id)) +
+  transition_reveal(along = flower_doy)
+```
+
+
+### 2. Create the simplest animation you can
+
+Now that we have the **places** sorted, we'll layer in the **timing**. This is where we start using `gganimate` functions. Specifically, we'll be using `transition_events()`, which lets us define **events**. In `gganimate`'s world, each event has its own **start** and **stop** time. This means different events can last for different periods of time. We need this for our case because different stations have different lengths of time that sakura trees are in bloom.
+
+`transition_events()`
+
+To do this we use the `transition_events()` function, which lets individual points stay on-screen for different periods of time. We need to specify 4 arguments:
+
+- `start` and `end` specify when in the timeline we're creating the points appear and disappear
+- `enter_length` and `exit_length` specify how long the points have to appear and disappear. These values aren't too important right now because we haven't specified the *type* of transition, so the points are appearing and disappearing instantly. But they'll become important when we start polishing our animation. The numbers use the same scale as the data, so the code below gives each point 5 days to appear and disappear. Why 5 days? No reason -- we just need to choose something and five is a nice enough number.
+
+```{r animation-points-only}
+ggplot() +
+  geom_point(data = sakura_overall,
+             aes(longitude, latitude)) +
+  transition_events(start = flower_doy,
+                    end = full_bloom_doy,
+                    enter_length = 5,
+                    exit_length = 5)
+```
+
+
+
+Add title.
+
+You can add a dynamic label to show the stage of your animation. For `transition_events()`, we use `frame_time`, which shows the day of year, since that is the scale we have for our `start` and `end` arguments in `transition_events()`. (Other transition types have different dynamic labels.)
+
+We wrap `frame_time` in `{curly braces}`. The curly braces let us use R code in our label text; the output of the code is what will appear in the title. Here, we're calling the `frame_time` variable, which changes dynamically with the animation.
+
+```{r animation-points-only-add-title}
+ggplot() +
+  geom_point(data = sakura_overall,
+             aes(longitude, latitude)) +
+  transition_events(start = flower_doy,
+                    end = full_bloom_doy,
+                    enter_length = 5,
+                    exit_length = 5) +
+  labs(title = "Day of year: {frame_time}")
+```
+
+
+
+Having day of year to over 10 decimal points of accuracy is overkill, though. Fortunately, `frame_time` acts like any other variable: we can apply code it to change it. So let's change the call we make to `frame_time` in the curly braces to round to the nearest integer.
+
+```{r animation-points-only-add-title-rounded}
+ggplot() +
+  geom_point(data = sakura_overall,
+             aes(longitude, latitude)) +
+  transition_events(start = flower_doy,
+                    end = full_bloom_doy,
+                    enter_length = 5,
+                    exit_length = 5) +
+  labs(title = "Day of year: {round(frame_time, 0)}")
+```
+
+Much better!
+
+
+
+Add pauses at beginning and end.
+
+We are now assigning the plot to an object `p`, then using `p` as the first argument in the `animate()` function, which lets us tweak things like start and end pauses. Here, we'll add a pause of 20 frames to the start and end, which translates to 2 seconds with the `animate()` function's default of 10 frames per second (FPS)
+
+```{r animation-points-only-add-pauses}
+p <- ggplot() +
+  geom_point(data = sakura_overall,
+             aes(longitude, latitude)) +
+  transition_events(start = flower_doy,
+                    end = full_bloom_doy,
+                    enter_length = 5,
+                    exit_length = 5) +
+  labs(title = "Day of year: {round(frame_time, 0)}")
+
+animate(p, start_pause = 15, end_pause = 15)
+```
+
+
+Add borders of Japan.
+
+This is an animated map, so borders will be useful reference point! `ggplot2` has its own `borders()` function, which draws basic borders for common entities like countries or continents. In our case, we'll use Japan. We'll also set the `fill` and `colour` so that we have a grey theme. A bit bland, but we'll change the colours later.
+
+```{r animation-add-borders}
+p <- ggplot() +
+  borders(regions = "Japan",
+          fill = "grey95",
+          colour = "grey50") +
+  geom_point(data = sakura_overall,
+             aes(longitude, latitude)) +
+  transition_events(start = flower_doy,
+                    end = full_bloom_doy,
+                    enter_length = 5,
+                    exit_length = 5) +
+  labs(title = "Day of year: {round(frame_time, 0)}")
+
+animate(p, start_pause = 15, end_pause = 15)
+```
+
+
+Use map theming.
+
+`coord_map()` translates geographic coordinates into a map projection
+`theme_map()` is a clean theme that's good for maps -- eliminates a lot of the excess plot elements (e.g., gridlines, axis text)
+
+```{r animation-add-map-coord-and-theme}
+p <- ggplot() +
+  borders(regions = "Japan",
+          fill = "grey95",
+          colour = "grey50") +
+  geom_point(data = sakura_overall,
+             aes(longitude, latitude)) +
+  coord_map() +
+  theme_map() +
+  transition_events(start = flower_doy,
+                    end = full_bloom_doy,
+                    enter_length = 5,
+                    exit_length = 5) +
+  labs(title = "Day of year: {round(frame_time, 0)}")
+
+animate(p, start_pause = 15, end_pause = 15)
+```
+
+
+Add cities as additional reference points.
+
+- Create an vector of cities we want to label (city name == station_name), along with longitude and latitude
+- Add tiny points for city markers
+- Add city labels next to those points
+
+Here we specify different `data` arguments in our `geom_*()` functions: vector of city labels we just created and the original data frame of sakura timing.
+
+```{r city-labels}
+sakura_labels <- sakura_overall %>%
+  filter(station_name %in% c("Sapporo", "Tokyo", "Kyoto",
+                             "Hiroshima", "Niigata", "Naha",
+                             "Nagasaki", "Sendai", "Hakodate")) %>%
+  select(station_name, longitude, latitude)
+
+sakura_labels %>%
+  kable(format = "html") %>%
+  kable_styling()
+```
+
+```{r animation-add-cities}
+p <- ggplot() +
+  borders(regions = "Japan",
+          fill = "grey95",
+          colour = "grey50") +
+  geom_point(data = sakura_labels,
+             aes(longitude, latitude),
+             size = 1) +
+  geom_text(data = sakura_labels,
+            aes(longitude, latitude, label = station_name),
+            hjust = -0.2,
+            vjust = 1) +
+  geom_point(data = sakura_overall,
+             aes(longitude, latitude)) +
+  coord_map() +
+  theme_map() +
+  transition_events(start = flower_doy,
+                    end = full_bloom_doy,
+                    enter_length = 5,
+                    exit_length = 5) +
+  labs(title = "Day of year: {round(frame_time, 0)}")
+
+animate(p, start_pause = 15, end_pause = 15)
+```
+
+At this point, the animation is basically done! From here, we are tweaking to make it clearer for the our audience and make it look nice.
+
+
+
+First thing we'll do is replace the points representing flower and bloom dates with a sakura icon. I bought mine from iconfinder.com, but you can find free, open-license icons out there.
+
+To do this, we'll use the `{ggimage}` package, which adds `geom_image()`. This acts just like `geom_point()`, except we can point it to an image file and it will display that instead of a point.
+
+I had to do a bunch of fiddling to get the size the way I wanted it.
+
+```{r animation-add-sakura-image}
+p <- ggplot() +
+  borders(regions = "Japan",
+          fill = "grey95",
+          colour = "grey50") +
+  geom_point(data = sakura_labels,
+             aes(longitude, latitude),
+             size = 1) +
+  geom_text(data = sakura_labels,
+            aes(longitude, latitude, label = station_name),
+            hjust = -0.2,
+            vjust = 1) +
+  geom_image(data = sakura_overall,
+             aes(longitude, latitude, image = "sakura-no-border.svg"),
+             size = 0.03) +
+  coord_map() +
+  theme_map() +
+  transition_events(start = flower_doy,
+                    end = full_bloom_doy,
+                    enter_length = 5,
+                    exit_length = 5) +
+  labs(title = "Day of year: {round(frame_time, 0)}")
+
+animate(p, start_pause = 15, end_pause = 15)
+```
+
+
+Convert day of year to calendar date.
+
+This step is a bit of a hack. If there are better ways to do it, I'd love to learn them. But this method, though ugly, at least works.
+
+We want to convert day of year into a simple calendar date, like "January 1" or "April 15". (Apologies to my non-North American friends for how I'm formatting the date!)
+
+- Converting day of year into date by adding the `frame_time`, which uses day of the year, to a "base date". Here, we use "2019-01-01". We need a year because date objects need to be a specific date, which requires year. And we use 2019 -- instead of 2020, when this post was written -- because 2020 is a leap year and we don't to include that extra day in February.
+- Converting that date into a format that shows only month and day (technically, the labels are in 2019, but we're just hiding the year so that we get a more generic calendar date)
+
+```{r animation-convert-to-date}
+p <- ggplot() +
+  borders(regions = "Japan",
+          fill = "grey95",
+          colour = "grey50") +
+  geom_point(data = sakura_labels,
+             aes(longitude, latitude),
+             size = 1) +
+  geom_text(data = sakura_labels,
+            aes(longitude, latitude, label = station_name),
+            hjust = -0.2,
+            vjust = 1) +
+  geom_image(data = sakura_overall,
+             aes(longitude, latitude, image = "sakura-no-border.svg"),
+             size = 0.03) +
+  coord_map() +
+  theme_map() +
+  transition_events(start = flower_doy,
+                    end = full_bloom_doy,
+                    enter_length = 5,
+                    exit_length = 5) +
+  labs(title = "{ymd(\"2019-01-01\") + frame_time}")
+
+animate(p, start_pause = 15, end_pause = 15)
+```
+
+```{r animation-convert-to-date-no-year}
+p <- ggplot() +
+  borders(regions = "Japan",
+          fill = "grey95",
+          colour = "grey50") +
+  geom_point(data = sakura_labels,
+             aes(longitude, latitude),
+             size = 1) +
+  geom_text(data = sakura_labels,
+            aes(longitude, latitude, label = station_name),
+            hjust = -0.2,
+            vjust = 1) +
+  geom_image(data = sakura_overall,
+             aes(longitude, latitude, image = "sakura-no-border.svg"),
+             size = 0.03) +
+  coord_map() +
+  theme_map() +
+  transition_events(start = flower_doy,
+                    end = full_bloom_doy,
+                    enter_length = 5,
+                    exit_length = 5) +
+  labs(title = "{paste(month(ymd(\"2019-01-01\") + frame_time, label = TRUE, abbr = FALSE),
+                  day(ymd(\"2019-01-01\") + frame_time))}")
+
+animate(p, start_pause = 15, end_pause = 15)
+```
+
+
+Change font. If you haven't used `{extrafont}` before, you'll need to do some setup (GitHub README: https://github.com/wch/extrafont).
+
+I used the Manga Temple font (https://www.dafont.com/manga-temple.font) by Blambot (https://twitter.com/blambot). Note that it's free for personal use, but not for commercial use. Full licence details are here: https://blambot.com/pages/licenses
+
+```{r animation-change-font}
+p <- ggplot() +
+  borders(regions = "Japan",
+          fill = "grey95",
+          colour = "grey50") +
+  geom_point(data = sakura_labels,
+             aes(longitude, latitude),
+             size = 1) +
+  geom_text(data = sakura_labels,
+            aes(longitude, latitude, label = station_name),
+            family = "Manga Temple",
+            hjust = -0.2,
+            vjust = 1) +
+  geom_image(data = sakura_overall,
+             aes(longitude, latitude, image = "sakura-no-border.svg"),
+             size = 0.03) +
+  coord_map() +
+  theme_map() +
+  transition_events(start = flower_doy,
+                    end = full_bloom_doy,
+                    enter_length = 5,
+                    exit_length = 5) +
+  labs(title = "{paste(month(ymd(\"2019-01-01\") + frame_time, label = TRUE, abbr = FALSE),
+                  day(ymd(\"2019-01-01\") + frame_time))}") +
+  theme(text = element_text(family = "Manga Temple"))
+
+animate(p, start_pause = 15, end_pause = 15)
+```
+
+
+Change colour of land, background, and font. Going for a creamy/brown vibe.
+
+```{r animation-change-colour}
+p <- ggplot() +
+  borders(regions = "Japan",
+          fill = "#AA9C8F",
+          colour = NA) +
+  geom_point(data = sakura_labels,
+             aes(longitude, latitude),
+             size = 1,
+             colour = "#3D1308") +
+  geom_text(data = sakura_labels,
+            aes(longitude, latitude, label = station_name),
+            colour = "#3D1308",
+            family = "Manga Temple",
+            hjust = -0.2,
+            vjust = 1) +
+  geom_image(data = sakura_overall,
+             aes(longitude, latitude, image = "sakura-no-border.svg"),
+             size = 0.03) +
+  coord_map() +
+  theme_map() +
+  transition_events(start = flower_doy,
+                    end = full_bloom_doy,
+                    enter_length = 5,
+                    exit_length = 5) +
+  labs(title = "{paste(month(ymd(\"2019-01-01\") + frame_time, label = TRUE, abbr = FALSE),
+                  day(ymd(\"2019-01-01\") + frame_time))}") +
+  theme(text = element_text(family = "Manga Temple", colour = "#3D1308"),
+        panel.border = element_blank(),
+        panel.background = element_blank(),
+        plot.background = element_rect(fill = "#FFF9F3", colour = NA))
+
+animate(p, start_pause = 15, end_pause = 15)
+```
+
+
+
+Add growing/shrinking sakura, using `enter_grow()` and `exit_shrink()`. Also using `exit_drift()` with its `y_mod` argument so that they "fall" and shrink simultaneously as they exit. `exit_*()` functions can be combined to get neat behaviours like this.
+
+```{r add-growing-shrinking-transition}
+p <- ggplot() +
+  borders(regions = "Japan",
+          fill = "#AA9C8F",
+          colour = NA) +
+  geom_point(data = sakura_labels,
+             aes(longitude, latitude),
+             size = 1,
+             colour = "#3D1308") +
+  geom_text(data = sakura_labels,
+            aes(longitude, latitude, label = station_name),
+            colour = "#3D1308",
+            family = "Manga Temple",
+            hjust = -0.2,
+            vjust = 1) +
+  geom_image(data = sakura_overall,
+             aes(longitude, latitude, image = "sakura-no-border.svg"),
+             size = 0.03) +
+  coord_map() +
+  theme_map() +
+  transition_events(start = flower_doy - 3,
+                    end = full_bloom_doy,
+                    range(0, 151),
+                    enter_length = 6,
+                    exit_length = 6) +
+  enter_grow() +
+  exit_drift(y_mod = -1) +
+  exit_shrink() +
+  labs(title = "{paste(month(ymd(\"2019-01-01\") + frame_time, label = TRUE, abbr = FALSE),
+                  day(ymd(\"2019-01-01\") + frame_time))}") +
+  theme(text = element_text(family = "Manga Temple", colour = "#3D1308"),
+        panel.border = element_blank(),
+        panel.background = element_blank(),
+        plot.background = element_rect(fill = "#FFF9F3", colour = NA))
+
+animate(p, start_pause = 15, end_pause = 15)
+```
+
+
+
+Slow overall animation speed.
+
+```{r animation-slow-speed}
+p <- ggplot() +
+  borders(regions = "Japan",
+          fill = "#AA9C8F",
+          colour = NA) +
+  geom_point(data = sakura_labels,
+             aes(longitude, latitude),
+             size = 1,
+             colour = "#3D1308") +
+  geom_text(data = sakura_labels,
+            aes(longitude, latitude, label = station_name),
+            colour = "#3D1308",
+            family = "Manga Temple",
+            hjust = -0.2,
+            vjust = 1) +
+  geom_image(data = sakura_overall,
+             aes(longitude, latitude, image = "sakura-no-border.svg"),
+             size = 0.03) +
+  coord_map() +
+  theme_map() +
+  transition_events(start = flower_doy - 3,
+                    end = full_bloom_doy,
+                    range(0, 151),
+                    enter_length = 6,
+                    exit_length = 6) +
+  enter_grow() +
+  exit_drift(y_mod = -1) +
+  exit_shrink() +
+  labs(title = "{paste(month(ymd(\"2019-01-01\") + frame_time, label = TRUE, abbr = FALSE),
+                  day(ymd(\"2019-01-01\") + frame_time))}") +
+  theme(text = element_text(family = "Manga Temple", colour = "#3D1308"),
+        panel.border = element_blank(),
+        panel.background = element_blank(),
+        plot.background = element_rect(fill = "#FFF9F3", colour = NA))
+
+animate(p, nframes = 151 * 2, start_pause = 15, end_pause = 15)
+```
+
+
+
+Add title.
+
+Title text and basic formatting of size, etc.
+
+```{r animation-add-title}
+p <- ggplot() +
+  borders(regions = "Japan",
+          fill = "#AA9C8F",
+          colour = NA) +
+  geom_point(data = sakura_labels,
+             aes(longitude, latitude),
+             size = 1,
+             colour = "#3D1308") +
+  geom_text(data = sakura_labels,
+            aes(longitude, latitude, label = station_name),
+            colour = "#3D1308",
+            family = "Manga Temple",
+            hjust = -0.2,
+            vjust = 1) +
+  geom_image(data = sakura_overall,
+             aes(longitude, latitude, image = "sakura-no-border.svg"),
+             size = 0.03) +
+  coord_map() +
+  theme_map() +
+  transition_events(start = flower_doy - 3,
+                    end = full_bloom_doy,
+                    range(0, 151),
+                    enter_length = 6,
+                    exit_length = 6) +
+  enter_grow() +
+  exit_drift(y_mod = -1) +
+  exit_shrink() +
+  labs(title = "When do cherry blossoms bloom in Japan?",
+       subtitle = paste("Hanami (\"flower viewing\") is a Japanese tradition over 1,000 years old, usually associated with",
+                     "cherry blossom trees. The sakura zensen (cherry blossom front) shows the typical date of",
+                     "flowering and full bloom across Japan.",
+                     "\n"),
+       sep = "\n",
+       caption = "{paste(month(ymd(\"2019-01-01\") + frame_time, label = TRUE, abbr = FALSE),
+                  day(ymd(\"2019-01-01\") + frame_time))}") +
+  theme(panel.border = element_blank(),
+        panel.background = element_blank(),
+        plot.background = element_rect(fill = "#FFF9F3", colour = NA),
+        plot.title = element_textbox_simple(family = "Manga Temple", colour = "#3D1308"),
+        plot.subtitle = element_textbox_simple(family = "Manga Temple", colour = "#3D1308"),
+        plot.caption = element_text(family = "Manga Temple", colour = "#3D1308"))
+
+animate(p, nframes = 151 * 2, start_pause = 15, end_pause = 15)
+```
+
+
+
+Adjust title size and location.
+
+Very fiddly step. I often spend a lot of time on this step making sure everything is just right, through trial and error. Specifically mention `halign` and `margin` arguments.
+
+```{r animation-adjust-title-size-location}
+p <- ggplot() +
+  borders(regions = "Japan",
+          fill = "#AA9C8F",
+          colour = NA) +
+  geom_point(data = sakura_labels,
+             aes(longitude, latitude),
+             size = 1,
+             colour = "#3D1308") +
+  geom_text(data = sakura_labels,
+            aes(longitude, latitude, label = station_name),
+            colour = "#3D1308",
+            family = "Manga Temple",
+            hjust = -0.2,
+            vjust = 1) +
+  geom_image(data = sakura_overall,
+             aes(longitude, latitude, image = "sakura-no-border.svg"),
+             size = 0.028) +
+  coord_map() +
+  theme_map() +
+  transition_events(start = flower_doy - 3,
+                    end = full_bloom_doy,
+                    range(0, 151),
+                    enter_length = 6,
+                    exit_length = 6) +
+  enter_grow() +
+  exit_drift(y_mod = -1) +
+  exit_shrink() +
+  labs(title = "When do cherry blossoms bloom in Japan?",
+       subtitle = paste("Hanami (\"flower viewing\") is a Japanese tradition over 1,000 years old, usually associated with",
+                     "cherry blossom trees. The sakura zensen (cherry blossom front) shows the typical date of",
+                     "flowering and full bloom across Japan.",
+                     "\n"),
+       sep = "\n",
+       caption = "{paste(month(ymd(\"2019-01-01\") + frame_time, label = TRUE, abbr = FALSE),
+                  day(ymd(\"2019-01-01\") + frame_time))}") +
+  theme(panel.border = element_blank(),
+        panel.background = element_blank(),
+        plot.background = element_rect(fill = "#FFF9F3", colour = NA),
+        plot.margin = margin(10, 50, 10, 50),
+        plot.title = element_textbox_simple(family = "Manga Temple", colour = "#3D1308",
+                                            halign = 0.5, margin = margin(10, 10, 10, 10)),
+        plot.subtitle = element_textbox_simple(family = "Manga Temple", colour = "#3D1308", halign = 0.5),
+        plot.caption = element_text(family = "Manga Temple", colour = "#3D1308"))
+
+animate(p, nframes = 151 * 2, start_pause = 15, end_pause = 15)
+```
+
+
+
+Add colour to title using `ggtext`.
+
+The `<span>` tags are intimidating, but you get used to them. `ggtext` overview here: https://github.com/wilkelab/ggtext
+
+```{r animation-add-colour-to-title}
+p <- ggplot() +
+  borders(regions = "Japan",
+          fill = "#AA9C8F",
+          colour = NA) +
+  geom_point(data = sakura_labels,
+             aes(longitude, latitude),
+             size = 1,
+             colour = "#3D1308") +
+  geom_text(data = sakura_labels,
+            aes(longitude, latitude, label = station_name),
+            colour = "#3D1308",
+            family = "Manga Temple",
+            hjust = -0.2,
+            vjust = 1) +
+  geom_image(data = sakura_overall,
+             aes(longitude, latitude, image = "sakura-no-border.svg"),
+             size = 0.028) +
+  coord_map() +
+  theme_map() +
+  transition_events(start = flower_doy - 3,
+                    end = full_bloom_doy,
+                    range(0, 151),
+                    enter_length = 6,
+                    exit_length = 6) +
+  enter_grow() +
+  exit_drift(y_mod = -1) +
+  exit_shrink() +
+  labs(title = "When do <span style = 'color:#D47FA8'>**cherry blossoms**</span> bloom in Japan?",
+       subtitle = paste("<span style = 'color:#D47FA8'>**Hanami**</span> (\"flower viewing\") is a Japanese tradition over 1,000 years old, usually associated with",
+                     "cherry blossom trees. The <span style = 'color:#D47FA8'>**sakura zensen**</span> (cherry blossom front) shows the typical date of",
+                     "flowering and full bloom across Japan.",
+                     "\n"),
+       sep = "\n",
+       caption = "{paste(month(ymd(\"2019-01-01\") + frame_time, label = TRUE, abbr = FALSE),
+                  day(ymd(\"2019-01-01\") + frame_time))}") +
+  theme(panel.border = element_blank(),
+        panel.background = element_blank(),
+        plot.background = element_rect(fill = "#FFF9F3", colour = NA),
+        plot.margin = margin(10, 50, 10, 50),
+        plot.title = element_textbox_simple(size = 11, family = "Manga Temple", colour = "#3D1308",
+                                            halign = 0.5, margin = margin(10, 10, 10, 10)),
+        plot.subtitle = element_textbox_simple(size = 8, family = "Manga Temple", colour = "#3D1308", halign = 0.5),
+        plot.caption = element_text(size = 14, family = "Manga Temple", colour = "#3D1308"))
+
+animate(p, nframes = 151 * 2, start_pause = 15, end_pause = 15)
+```
+
+
+
+```{r final-for-now-animation-brown}
+p <- ggplot() +
+  borders(regions = "Japan",
+          fill = "#AA9C8F",
+          colour = NA) +
+  geom_point(data = sakura_labels,
+             aes(longitude, latitude),
+             size = 2,
+             colour = "#3D1308") +
+  geom_text(data = sakura_labels,
+            aes(longitude, latitude, label = station_name),
+            size = 8,
+            colour = "#3D1308",
+            family = "Manga Temple",
+            hjust = -0.2,
+            vjust = 1) +
+  geom_image(data = sakura_overall,
+             aes(longitude, latitude, image = "sakura-no-border.svg"),
+             size = 0.028) +
+  coord_map() +
+  theme_map() +
+  transition_events(start = flower_doy - 3,
+                    end = full_bloom_doy,
+                    range(0, 151),
+                    enter_length = 6,
+                    exit_length = 6) +
+  enter_grow() +
+  exit_drift(y_mod = -1) +
+  exit_shrink() +
+  labs(title = "When do <span style = 'color:#D47FA8'>**cherry blossoms**</span> bloom in Japan?",
+  subtitle = paste("<span style = 'color:#D47FA8'>**Hanami**</span> (\"flower viewing\") is a Japanese tradition over 1,000 years old, usually associated with",
+                     "cherry blossom trees. The <span style = 'color:#D47FA8'>**sakura zensen**</span> (cherry blossom front) shows the typical date of",
+                     "flowering and full bloom across Japan.",
+                     "\n"),
+                     sep = "\n",
+  caption = "{paste(month(ymd(\"2019-01-01\") + frame_time, label = TRUE, abbr = FALSE),
+                  day(ymd(\"2019-01-01\") + frame_time))}") +
+  theme(panel.border = element_blank(),
+        panel.background = element_blank(),
+        plot.background = element_rect(fill = "#FFF9F3", colour = NA),
+        plot.margin = margin(10, 50, 10, 50),
+        plot.title = element_textbox_simple(size = 32, family = "Manga Temple", colour = "#3D1308",
+                                            halign = 0.5, margin = margin(10, 10, -40, 10)),
+        plot.subtitle = element_textbox_simple(size = 20, family = "Manga Temple", colour = "#3D1308", halign = 0.5),
+        plot.caption = element_text(size = 32, family = "Manga Temple", colour = "#3D1308"))
+
+anim <- animate(p, nframes = 151 * 2, start_pause = 15, end_pause = 15, height = 1600, width = 1100)
+
+### Save animation
+### anim_save("sakura-front-brown.gif", animation = anim)
+```
