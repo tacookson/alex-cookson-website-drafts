@@ -101,24 +101,13 @@ ggplot() +
 ```
 
 
-### 3. Refine the `transition`
+### 3. Refine the transition
 
-We've shown our audience when cherry blossoms flower, but we also want to show when they are in full bloom. We're going to use a more complicated function for this: `transition_events()`. This function is similar to `transition_reveal()`. We still start without data, and that data still gets revealed according to a variable we give.
+We've shown our audience when cherry blossoms flower, but we also want to show when they're in full bloom. To do this, we'll up the complexity (just a little!) with a different transition function: `transition_events()`. It's similar to `transition_reveal()` in that we start without data and that data gets revealed according to a variable we give.
 
-There are two key differences, though. First, data won't stay visible until the end of the animation. They will **disappear** at a certain point. As with `transition_reveal()`, we just need to tell the function when the disappearance should happen.
+There's one key difference, though: data won't stay visible until the end of the animation. They will **disappear** at a certain point. As with `transition_reveal()`, we just need to tell the function when the disappearance should happen. Instead of `transition_reveal()`'s `along` argument, `transition_events()` has two arguments to control the appearance and disappearance of data points: `start` and `end`.
 
-Second, **DOES THIS FUNCTION NEED ENTER AND EXIT LENGTHS? CHECK BEFORE FINISHING THIS STEP**
-
-
-
-we'll be using `transition_events()`, which lets us define **events**. In `gganimate`'s world, each event has its own **start** and **stop** time. This means different events can last for different periods of time. We need this for our case because different stations have different lengths of time that sakura trees are in bloom.
-
-`transition_events()`
-
-To do this we use the `transition_events()` function, which lets individual points stay on-screen for different periods of time. We need to specify 4 arguments:
-
-- `start` and `end` specify when in the timeline we're creating the points appear and disappear
-- `enter_length` and `exit_length` specify how long the points have to appear and disappear. These values aren't too important right now because we haven't specified the *type* of transition, so the points are appearing and disappearing instantly. But they'll become important when we start polishing our animation. The numbers use the same scale as the data, so the code below gives each point 5 days to appear and disappear. Why 5 days? No reason -- we just need to choose something and five is a nice enough number.
+There's one more complication. `transition_events()` also needs us to specify a window of time for the points to appear and disappear, using the `enter_length` and `exit_length` arguments. These values aren't important right now, but we need to put something in here for the animation to work. I promise we'll come back to these arguments later. For now, let's set them to 1.
 
 ```{r animation-points-only}
 ggplot() +
@@ -126,13 +115,13 @@ ggplot() +
              aes(longitude, latitude)) +
   transition_events(start = flower_doy,
                     end = full_bloom_doy,
-                    enter_length = 5,
-                    exit_length = 5)
+                    enter_length = 1,
+                    exit_length = 1)
 ```
 
 
 
-### 4. Add a dynamic label
+### 4. Add a dynamic title
 
 Dynamic labels change depending on where in the animation you are. In our case, we'll add a dynamic label showing the **day of year**, since that is the scale used by our variables for bloom dates. Different `transition_*()` types have different dynamic labels. `transition_events()` uses `frame_time`.
 
@@ -144,8 +133,8 @@ ggplot() +
              aes(longitude, latitude)) +
   transition_events(start = flower_doy,
                     end = full_bloom_doy,
-                    enter_length = 5,
-                    exit_length = 5) +
+                    enter_length = 1,
+                    exit_length = 1) +
   labs(title = "Day of year: {frame_time}")
 ```
 
@@ -157,8 +146,8 @@ ggplot() +
              aes(longitude, latitude)) +
   transition_events(start = flower_doy,
                     end = full_bloom_doy,
-                    enter_length = 5,
-                    exit_length = 5) +
+                    enter_length = 1,
+                    exit_length = 1) +
   labs(title = "Day of year: {round(frame_time, 0)}")
 ```
 
@@ -168,7 +157,13 @@ Much better!
 
 ### 5. Add start and end pauses
 
-We are now assigning the plot to an object `p`, then using `p` as the first argument in the `animate()` function, which lets us tweak things like start and end pauses. Here, we'll add a pause of 20 frames to the start and end, which translates to 2 seconds with the `animate()` function's default of 10 frames per second (FPS)
+The current animation is on a loop: as soon as it ends, it immediately starts the animation again from the beginning. It can be helpful to add a brief pause at the beginning and end of the animation. Doing so makes it easier for our audience to tell what's going on.
+
+To add these pause, we need to change the structure of our code. Right now, we're creating an animation that will play as soon as it finishes rendering. When we do this, `gganimate` uses some default settings, including looping the animation without any start/end pauses.
+
+We can get at the pause settings by saving our animation to an intermediate object -- we'll use `p` for "plot". Then, we can use the `animate()` function with `p` as its first argument. The `animate()` function has a bunch of useful settings we can change, including start and end pauses.
+
+Here, we'll add a pause of 15 frames to the start and end, which translates to 1.5 seconds with the `animate()` function's default of 10 frames per second (FPS)
 
 ```{r animation-points-only-add-pauses}
 p <- ggplot() +
@@ -184,7 +179,7 @@ animate(p, start_pause = 15, end_pause = 15)
 ```
 
 
-Add borders of Japan.
+### 6. Add Japan country borders
 
 This is an animated map, so borders will be useful reference point! `ggplot2` has its own `borders()` function, which draws basic borders for common entities like countries or continents. In our case, we'll use Japan. We'll also set the `fill` and `colour` so that we have a grey theme. A bit bland, but we'll change the colours later.
 
@@ -205,7 +200,7 @@ animate(p, start_pause = 15, end_pause = 15)
 ```
 
 
-Use map theming.
+### 7. Use map theme (`theme_map()`)
 
 `coord_map()` translates geographic coordinates into a map projection
 `theme_map()` is a clean theme that's good for maps -- eliminates a lot of the excess plot elements (e.g., gridlines, axis text)
@@ -229,7 +224,7 @@ animate(p, start_pause = 15, end_pause = 15)
 ```
 
 
-Add cities as additional reference points.
+### 8. Add city reference points
 
 - Create an vector of cities we want to label (city name == station_name), along with longitude and latitude
 - Add tiny points for city markers
@@ -277,6 +272,8 @@ animate(p, start_pause = 15, end_pause = 15)
 At this point, the animation is basically done! From here, we are tweaking to make it clearer for the our audience and make it look nice.
 
 
+### 9. Replace default points with sakura icon
+
 
 First thing we'll do is replace the points representing flower and bloom dates with a sakura icon. I bought mine from iconfinder.com, but you can find free, open-license icons out there.
 
@@ -311,7 +308,7 @@ animate(p, start_pause = 15, end_pause = 15)
 ```
 
 
-Convert day of year to calendar date.
+### 10. Convert dynamic title to calendar date
 
 This step is a bit of a hack. If there are better ways to do it, I'd love to learn them. But this method, though ugly, at least works.
 
@@ -374,7 +371,9 @@ animate(p, start_pause = 15, end_pause = 15)
 ```
 
 
-Change font. If you haven't used `{extrafont}` before, you'll need to do some setup (GitHub README: https://github.com/wch/extrafont).
+### 11. Change font
+
+If you haven't used `{extrafont}` before, you'll need to do some setup (GitHub README: https://github.com/wch/extrafont).
 
 I used the Manga Temple font (https://www.dafont.com/manga-temple.font) by Blambot (https://twitter.com/blambot). Note that it's free for personal use, but not for commercial use. Full licence details are here: https://blambot.com/pages/licenses
 
@@ -408,7 +407,9 @@ animate(p, start_pause = 15, end_pause = 15)
 ```
 
 
-Change colour of land, background, and font. Going for a creamy/brown vibe.
+### 12. Change colour palette
+
+Colour of land, background, and font. Going for a creamy/brown vibe.
 
 ```{r animation-change-colour}
 p <- ggplot() +
@@ -446,7 +447,9 @@ animate(p, start_pause = 15, end_pause = 15)
 
 
 
-Add growing/shrinking sakura, using `enter_grow()` and `exit_shrink()`. Also using `exit_drift()` with its `y_mod` argument so that they "fall" and shrink simultaneously as they exit. `exit_*()` functions can be combined to get neat behaviours like this.
+### 13. Tweak enter and exit animations
+
+Using `enter_grow()` and `exit_shrink()`. Also using `exit_drift()` with its `y_mod` argument so that they "fall" and shrink simultaneously as they exit. `exit_*()` functions can be combined to get neat behaviours like this.
 
 ```{r add-growing-shrinking-transition}
 p <- ggplot() +
@@ -488,7 +491,7 @@ animate(p, start_pause = 15, end_pause = 15)
 
 
 
-Slow overall animation speed.
+### 14. Slow overall animation speed
 
 ```{r animation-slow-speed}
 p <- ggplot() +
@@ -530,7 +533,7 @@ animate(p, nframes = 151 * 2, start_pause = 15, end_pause = 15)
 
 
 
-Add title.
+### 15. Add title and explanation blurb
 
 Title text and basic formatting of size, etc.
 
@@ -582,7 +585,7 @@ animate(p, nframes = 151 * 2, start_pause = 15, end_pause = 15)
 
 
 
-Adjust title size and location.
+### 16. Adjust title size and location
 
 Very fiddly step. I often spend a lot of time on this step making sure everything is just right, through trial and error. Specifically mention `halign` and `margin` arguments.
 
@@ -636,7 +639,7 @@ animate(p, nframes = 151 * 2, start_pause = 15, end_pause = 15)
 
 
 
-Add colour to title using `ggtext`.
+### 17. Add colour to title with `ggtext`
 
 The `<span>` tags are intimidating, but you get used to them. `ggtext` overview here: https://github.com/wilkelab/ggtext
 
@@ -737,7 +740,4 @@ p <- ggplot() +
         plot.caption = element_text(size = 32, family = "Manga Temple", colour = "#3D1308"))
 
 anim <- animate(p, nframes = 151 * 2, start_pause = 15, end_pause = 15, height = 1600, width = 1100)
-
-### Save animation
-### anim_save("sakura-front-brown.gif", animation = anim)
 ```
