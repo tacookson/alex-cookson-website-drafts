@@ -97,7 +97,9 @@ We need to tell `transition_reveal()` when to reveal each data point, which we d
 ggplot() +
   geom_point(data = sakura_overall,
              aes(longitude, latitude, group = station_id)) +
+  ###################################################################
   transition_reveal(along = flower_doy)
+  ###################################################################
 ```
 
 
@@ -113,10 +115,12 @@ There's one more complication. `transition_events()` also needs us to specify a 
 ggplot() +
   geom_point(data = sakura_overall,
              aes(longitude, latitude)) +
+  ###################################################################
   transition_events(start = flower_doy,
                     end = full_bloom_doy,
                     enter_length = 1,
                     exit_length = 1)
+  ###################################################################
 ```
 
 
@@ -135,7 +139,9 @@ ggplot() +
                     end = full_bloom_doy,
                     enter_length = 1,
                     exit_length = 1) +
+  ###################################################################
   labs(title = "Day of year: {frame_time}")
+  ###################################################################
 ```
 
 Having day of year to over 10 decimal points of accuracy is distracting. However, since things inside curly braces act like R code, we can wrap the `frame_time` dynamic variable in a function and our title will show the output of that function. So we'll wrap it in a `round()` function to get it to the nearest integer.
@@ -148,7 +154,9 @@ ggplot() +
                     end = full_bloom_doy,
                     enter_length = 1,
                     exit_length = 1) +
+  ###################################################################
   labs(title = "Day of year: {round(frame_time, 0)}")
+  ###################################################################
 ```
 
 Much better!
@@ -157,53 +165,63 @@ Much better!
 
 ### 5. Add start and end pauses
 
-The current animation is on a loop: as soon as it ends, it immediately starts the animation again from the beginning. It can be helpful to add a brief pause at the beginning and end of the animation. Doing so makes it easier for our audience to tell what's going on.
+The current animation is on a loop: as soon as it ends, it immediately starts the animation again from the beginning. It can be helpful to add a brief pause at the beginning and end of the animation. These pauses make it easier for our audience to tell what's going on.
 
-To add these pause, we need to change the structure of our code. Right now, we're creating an animation that will play as soon as it finishes rendering. When we do this, `gganimate` uses some default settings, including looping the animation without any start/end pauses.
+To add pauses, we need to change the structure of our code. Right now, we're creating an animation that will play as soon as it finishes rendering. When we do this, `gganimate` uses some default settings, including looping the animation without any start/end pauses. We're going to switch to saving our plotting code to an object, which we'll call `p` for "plot".
 
-We can get at the pause settings by saving our animation to an intermediate object -- we'll use `p` for "plot". Then, we can use the `animate()` function with `p` as its first argument. The `animate()` function has a bunch of useful settings we can change, including start and end pauses.
+Now, we can use the `animate()` function, which gives us more flexibility to tweak the settings of our animation, including start and end pauses. `animate()`'s first argument is what we want to animate, which is our plot object, `p`. This is the only required argument. If we called `animate(p)`, we would get the exact same result as we did on the previous step.
 
-Here, we'll add a pause of 15 frames to the start and end, which translates to 1.5 seconds with the `animate()` function's default of 10 frames per second (FPS)
+But to add pauses, we need to specify values for the `start_pause` and `end_pause` arguments. These arguments use number of frames (not seconds), which defaults to 10. Let's set both of them 15, which translates into 1.5-second pauses.
+
 
 ```{r animation-points-only-add-pauses}
+# Assigning plot to p
 p <- ggplot() +
   geom_point(data = sakura_overall,
              aes(longitude, latitude)) +
   transition_events(start = flower_doy,
                     end = full_bloom_doy,
-                    enter_length = 5,
-                    exit_length = 5) +
+                    enter_length = 1,
+                    exit_length = 1) +
   labs(title = "Day of year: {round(frame_time, 0)}")
 
+#####################################################################
 animate(p, start_pause = 15, end_pause = 15)
+#####################################################################
 ```
 
 
 ### 6. Add Japan country borders
 
-This is an animated map, so borders will be useful reference point! `ggplot2` has its own `borders()` function, which draws basic borders for common entities like countries or continents. In our case, we'll use Japan. We'll also set the `fill` and `colour` so that we have a grey theme. A bit bland, but we'll change the colours later.
+This animation is a map, so borders are a useful reference point! `ggplot2` has its own `borders()` function, which draws basic borders for common entities like countries or continents. There are more sophisticated ways of dealing with borders, but this suits our purposes just fine, so we'll stick with this simple method. We need to set the `regions` argument to "Japan".
+
+We'll also set the `fill` and `colour` so that we have a grey theme. I'm using R's built-in greys `grey##`, where higher numbers give you a lighter grey. I know it's bland, but we'll make the colours more interesting later. Right now we're focused on getting the borders set up.
+
 
 ```{r animation-add-borders}
 p <- ggplot() +
+  ###################################################################
   borders(regions = "Japan",
           fill = "grey95",
           colour = "grey50") +
+  ###################################################################
   geom_point(data = sakura_overall,
              aes(longitude, latitude)) +
   transition_events(start = flower_doy,
                     end = full_bloom_doy,
-                    enter_length = 5,
-                    exit_length = 5) +
+                    enter_length = 1,
+                    exit_length = 1) +
   labs(title = "Day of year: {round(frame_time, 0)}")
 
 animate(p, start_pause = 15, end_pause = 15)
 ```
 
 
-### 7. Use map theme (`theme_map()`)
+### 7. Use map theming
 
-`coord_map()` translates geographic coordinates into a map projection
-`theme_map()` is a clean theme that's good for maps -- eliminates a lot of the excess plot elements (e.g., gridlines, axis text)
+Now that we have borders, the axis labels and gridlines are getting distracting. Our audience doesn't need to pinpoint precise geographic coordinates, so let's get rid of them. The `{ggthemes}` package has a theme, `theme_map()`, that gets rid of these extras that aren't typically needed for maps.
+
+One more thing. You probably didn't notice, but Japan is *stretched* compared to what you'd see on most maps. That's because we haven't specified a map projection to use. Let's do that with `coord_map()`, using the familiar [Mercator projection](https://en.wikipedia.org/wiki/Mercator_projection).
 
 ```{r animation-add-map-coord-and-theme}
 p <- ggplot() +
@@ -212,19 +230,21 @@ p <- ggplot() +
           colour = "grey50") +
   geom_point(data = sakura_overall,
              aes(longitude, latitude)) +
-  coord_map() +
+  ###################################################################
+  coord_map(projection = "mercator") +
   theme_map() +
+  ###################################################################
   transition_events(start = flower_doy,
                     end = full_bloom_doy,
-                    enter_length = 5,
-                    exit_length = 5) +
+                    enter_length = 1,
+                    exit_length = 1) +
   labs(title = "Day of year: {round(frame_time, 0)}")
 
 animate(p, start_pause = 15, end_pause = 15)
 ```
 
 
-### 8. Add city reference points
+### 8. Add major cities as reference points
 
 - Create an vector of cities we want to label (city name == station_name), along with longitude and latitude
 - Add tiny points for city markers
@@ -249,6 +269,7 @@ p <- ggplot() +
   borders(regions = "Japan",
           fill = "grey95",
           colour = "grey50") +
+  ###################################################################
   geom_point(data = sakura_labels,
              aes(longitude, latitude),
              size = 1) +
@@ -256,14 +277,15 @@ p <- ggplot() +
             aes(longitude, latitude, label = station_name),
             hjust = -0.2,
             vjust = 1) +
+  ###################################################################
   geom_point(data = sakura_overall,
              aes(longitude, latitude)) +
-  coord_map() +
+  coord_map(projection = "mercator") +
   theme_map() +
   transition_events(start = flower_doy,
                     end = full_bloom_doy,
-                    enter_length = 5,
-                    exit_length = 5) +
+                    enter_length = 1,
+                    exit_length = 1) +
   labs(title = "Day of year: {round(frame_time, 0)}")
 
 animate(p, start_pause = 15, end_pause = 15)
@@ -293,15 +315,17 @@ p <- ggplot() +
             aes(longitude, latitude, label = station_name),
             hjust = -0.2,
             vjust = 1) +
+  ###################################################################
   geom_image(data = sakura_overall,
              aes(longitude, latitude, image = "sakura-no-border.svg"),
              size = 0.03) +
-  coord_map() +
+  ###################################################################
+  coord_map(projection = "mercator") +
   theme_map() +
   transition_events(start = flower_doy,
                     end = full_bloom_doy,
-                    enter_length = 5,
-                    exit_length = 5) +
+                    enter_length = 1,
+                    exit_length = 1) +
   labs(title = "Day of year: {round(frame_time, 0)}")
 
 animate(p, start_pause = 15, end_pause = 15)
@@ -332,13 +356,15 @@ p <- ggplot() +
   geom_image(data = sakura_overall,
              aes(longitude, latitude, image = "sakura-no-border.svg"),
              size = 0.03) +
-  coord_map() +
+  coord_map(projection = "mercator") +
   theme_map() +
   transition_events(start = flower_doy,
                     end = full_bloom_doy,
-                    enter_length = 5,
-                    exit_length = 5) +
+                    enter_length = 1,
+                    exit_length = 1) +
+  ###################################################################
   labs(title = "{ymd(\"2019-01-01\") + frame_time}")
+  ###################################################################
 
 animate(p, start_pause = 15, end_pause = 15)
 ```
@@ -358,14 +384,16 @@ p <- ggplot() +
   geom_image(data = sakura_overall,
              aes(longitude, latitude, image = "sakura-no-border.svg"),
              size = 0.03) +
-  coord_map() +
+  coord_map(projection = "mercator") +
   theme_map() +
   transition_events(start = flower_doy,
                     end = full_bloom_doy,
-                    enter_length = 5,
-                    exit_length = 5) +
+                    enter_length = 1,
+                    exit_length = 1) +
+  ###################################################################
   labs(title = "{paste(month(ymd(\"2019-01-01\") + frame_time, label = TRUE, abbr = FALSE),
                   day(ymd(\"2019-01-01\") + frame_time))}")
+  ###################################################################
 
 animate(p, start_pause = 15, end_pause = 15)
 ```
@@ -387,21 +415,25 @@ p <- ggplot() +
              size = 1) +
   geom_text(data = sakura_labels,
             aes(longitude, latitude, label = station_name),
+            #####################################
             family = "Manga Temple",
+            #####################################
             hjust = -0.2,
             vjust = 1) +
   geom_image(data = sakura_overall,
              aes(longitude, latitude, image = "sakura-no-border.svg"),
              size = 0.03) +
-  coord_map() +
+  coord_map(projection = "mercator") +
   theme_map() +
   transition_events(start = flower_doy,
                     end = full_bloom_doy,
-                    enter_length = 5,
-                    exit_length = 5) +
+                    enter_length = 1,
+                    exit_length = 1) +
   labs(title = "{paste(month(ymd(\"2019-01-01\") + frame_time, label = TRUE, abbr = FALSE),
                   day(ymd(\"2019-01-01\") + frame_time))}") +
+  ###################################################################
   theme(text = element_text(family = "Manga Temple"))
+  ###################################################################
 
 animate(p, start_pause = 15, end_pause = 15)
 ```
@@ -413,34 +445,42 @@ Colour of land, background, and font. Going for a creamy/brown vibe.
 
 ```{r animation-change-colour}
 p <- ggplot() +
+  ###################################################################
   borders(regions = "Japan",
           fill = "#AA9C8F",
           colour = NA) +
+  ###################################################################
   geom_point(data = sakura_labels,
              aes(longitude, latitude),
              size = 1,
+             ##########################
              colour = "#3D1308") +
+             ##########################
   geom_text(data = sakura_labels,
             aes(longitude, latitude, label = station_name),
+            ###########################
             colour = "#3D1308",
+            ###########################
             family = "Manga Temple",
             hjust = -0.2,
             vjust = 1) +
   geom_image(data = sakura_overall,
              aes(longitude, latitude, image = "sakura-no-border.svg"),
              size = 0.03) +
-  coord_map() +
+  coord_map(projection = "mercator") +
   theme_map() +
   transition_events(start = flower_doy,
                     end = full_bloom_doy,
-                    enter_length = 5,
-                    exit_length = 5) +
+                    enter_length = 1,
+                    exit_length = 1) +
   labs(title = "{paste(month(ymd(\"2019-01-01\") + frame_time, label = TRUE, abbr = FALSE),
                   day(ymd(\"2019-01-01\") + frame_time))}") +
+  ###################################################################
   theme(text = element_text(family = "Manga Temple", colour = "#3D1308"),
         panel.border = element_blank(),
         panel.background = element_blank(),
         plot.background = element_rect(fill = "#FFF9F3", colour = NA))
+  ###################################################################
 
 animate(p, start_pause = 15, end_pause = 15)
 ```
@@ -469,8 +509,9 @@ p <- ggplot() +
   geom_image(data = sakura_overall,
              aes(longitude, latitude, image = "sakura-no-border.svg"),
              size = 0.03) +
-  coord_map() +
+  coord_map(projection = "mercator") +
   theme_map() +
+  ###################################################################
   transition_events(start = flower_doy - 3,
                     end = full_bloom_doy,
                     range(0, 151),
@@ -479,6 +520,7 @@ p <- ggplot() +
   enter_grow() +
   exit_drift(y_mod = -1) +
   exit_shrink() +
+  ###################################################################
   labs(title = "{paste(month(ymd(\"2019-01-01\") + frame_time, label = TRUE, abbr = FALSE),
                   day(ymd(\"2019-01-01\") + frame_time))}") +
   theme(text = element_text(family = "Manga Temple", colour = "#3D1308"),
@@ -511,7 +553,7 @@ p <- ggplot() +
   geom_image(data = sakura_overall,
              aes(longitude, latitude, image = "sakura-no-border.svg"),
              size = 0.03) +
-  coord_map() +
+  coord_map(projection = "mercator") +
   theme_map() +
   transition_events(start = flower_doy - 3,
                     end = full_bloom_doy,
@@ -528,7 +570,9 @@ p <- ggplot() +
         panel.background = element_blank(),
         plot.background = element_rect(fill = "#FFF9F3", colour = NA))
 
+#####################################################################
 animate(p, nframes = 151 * 2, start_pause = 15, end_pause = 15)
+#####################################################################
 ```
 
 
@@ -555,7 +599,7 @@ p <- ggplot() +
   geom_image(data = sakura_overall,
              aes(longitude, latitude, image = "sakura-no-border.svg"),
              size = 0.03) +
-  coord_map() +
+  coord_map(projection = "mercator") +
   theme_map() +
   transition_events(start = flower_doy - 3,
                     end = full_bloom_doy,
@@ -565,6 +609,7 @@ p <- ggplot() +
   enter_grow() +
   exit_drift(y_mod = -1) +
   exit_shrink() +
+  ###################################################################
   labs(title = "When do cherry blossoms bloom in Japan?",
        subtitle = paste("Hanami (\"flower viewing\") is a Japanese tradition over 1,000 years old, usually associated with",
                      "cherry blossom trees. The sakura zensen (cherry blossom front) shows the typical date of",
@@ -573,12 +618,15 @@ p <- ggplot() +
        sep = "\n",
        caption = "{paste(month(ymd(\"2019-01-01\") + frame_time, label = TRUE, abbr = FALSE),
                   day(ymd(\"2019-01-01\") + frame_time))}") +
+  ###################################################################
   theme(panel.border = element_blank(),
         panel.background = element_blank(),
         plot.background = element_rect(fill = "#FFF9F3", colour = NA),
+        ###################################################
         plot.title = element_textbox_simple(family = "Manga Temple", colour = "#3D1308"),
         plot.subtitle = element_textbox_simple(family = "Manga Temple", colour = "#3D1308"),
         plot.caption = element_text(family = "Manga Temple", colour = "#3D1308"))
+        ###################################################
 
 animate(p, nframes = 151 * 2, start_pause = 15, end_pause = 15)
 ```
@@ -607,7 +655,7 @@ p <- ggplot() +
   geom_image(data = sakura_overall,
              aes(longitude, latitude, image = "sakura-no-border.svg"),
              size = 0.028) +
-  coord_map() +
+  coord_map(projection = "mercator") +
   theme_map() +
   transition_events(start = flower_doy - 3,
                     end = full_bloom_doy,
@@ -661,7 +709,7 @@ p <- ggplot() +
   geom_image(data = sakura_overall,
              aes(longitude, latitude, image = "sakura-no-border.svg"),
              size = 0.028) +
-  coord_map() +
+  coord_map(projection = "mercator") +
   theme_map() +
   transition_events(start = flower_doy - 3,
                     end = full_bloom_doy,
@@ -712,7 +760,7 @@ p <- ggplot() +
   geom_image(data = sakura_overall,
              aes(longitude, latitude, image = "sakura-no-border.svg"),
              size = 0.028) +
-  coord_map() +
+  coord_map(projection = "mercator") +
   theme_map() +
   transition_events(start = flower_doy - 3,
                     end = full_bloom_doy,
