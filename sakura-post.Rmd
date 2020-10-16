@@ -244,13 +244,19 @@ animate(p, start_pause = 15, end_pause = 15)
 ```
 
 
+
 ### 8. Add major cities as reference points
 
-- Create an vector of cities we want to label (city name == station_name), along with longitude and latitude
-- Add tiny points for city markers
-- Add city labels next to those points
+Let's add more reference points so that our audience can get their bearings. Specifically, let's add locations of major cities, like Tokyo and Kyoto. This will involve adding two elements to the animation: **points** for city locations and **text** for city names. (We'll use `geom_point` for locations and `geom_text` for names.)
 
-Here we specify different `data` arguments in our `geom_*()` functions: vector of city labels we just created and the original data frame of sakura timing.
+We already have the data we need in `sakura_overall`:
+
+- Geographic coordinates (`longitude` and `latitude`) tell us location
+- Station names (`station_name`) are just city names, so that gives us names
+
+But I don't want to use `sakura_overall` as the data source for our reference points. Remember, we just want to show *major* cities. If we showed every city in `sakura_overall`, it would dominate the animation and we wouldn't be able to see much else.
+
+So let's create a separate data frame that only has the cities we want to show. I did some research to find nine cities fairly spread out across Japan, with decent-size populations. To get our data frame for these reference points, we'll add a `filter()` step that matches `station_name` to the list of cities I picked out.
 
 ```{r city-labels}
 sakura_labels <- sakura_overall %>%
@@ -263,6 +269,11 @@ sakura_labels %>%
   kable(format = "html") %>%
   kable_styling()
 ```
+
+
+Now we add our `geom_point()` and `geom_text()` layers, specifying the `data` argument as `sakura_labels` (the data frame we just created).
+
+We also added `hjust` (horizontal justification) and `vjust` (vertical justification) arguments to offset the city name from the location point. It can take some fiddling and a few tries to get the positioning exactly right. I tried 5 or 6 different combinations before I got the text positioned right where I wanted it.
 
 ```{r animation-add-cities}
 p <- ggplot() +
@@ -291,17 +302,15 @@ p <- ggplot() +
 animate(p, start_pause = 15, end_pause = 15)
 ```
 
-At this point, the animation is basically done! From here, we are tweaking to make it clearer for the our audience and make it look nice.
 
 
 ### 9. Replace default points with sakura icon
 
+Using the default points to represent blooms is fine. But they're a bit boring, don't you think? Our data is about sakura trees, so let's use sakura icons! I ended up buying an icon from [Iconfinder](https://www.iconfinder.com) because it was exactly what I was looking for. But there are tons of free icons out there if you don't want to spend money.
 
-First thing we'll do is replace the points representing flower and bloom dates with a sakura icon. I bought mine from iconfinder.com, but you can find free, open-license icons out there.
+We're going to replace our `geom_point()` function with `geom_image()`, from the `{ggimage}` package. `geom_image()` is almost the same, except that we have an extra argument -- `image` -- that we point to the image file we want to use. In my case, I save the image as `sakura-no-border.svg` in my project's main directory. If you save yours in a different place, you may need to fiddle with the file path.
 
-To do this, we'll use the `{ggimage}` package, which adds `geom_image()`. This acts just like `geom_point()`, except we can point it to an image file and it will display that instead of a point.
-
-I had to do a bunch of fiddling to get the size the way I wanted it.
+Speaking of fiddling, I had to try several values for the `size` argument. You may have to do the same.
 
 ```{r animation-add-sakura-image}
 p <- ggplot() +
@@ -390,10 +399,10 @@ p <- ggplot() +
                     end = full_bloom_doy,
                     enter_length = 1,
                     exit_length = 1) +
-  ###################################################################
+  #############################################################################
   labs(title = "{paste(month(ymd(\"2019-01-01\") + frame_time, label = TRUE, abbr = FALSE),
                   day(ymd(\"2019-01-01\") + frame_time))}")
-  ###################################################################
+  #############################################################################
 
 animate(p, start_pause = 15, end_pause = 15)
 ```
@@ -475,12 +484,12 @@ p <- ggplot() +
                     exit_length = 1) +
   labs(title = "{paste(month(ymd(\"2019-01-01\") + frame_time, label = TRUE, abbr = FALSE),
                   day(ymd(\"2019-01-01\") + frame_time))}") +
-  ###################################################################
+  #############################################################################
   theme(text = element_text(family = "Manga Temple", colour = "#3D1308"),
         panel.border = element_blank(),
         panel.background = element_blank(),
         plot.background = element_rect(fill = "#FFF9F3", colour = NA))
-  ###################################################################
+  #############################################################################
 
 animate(p, start_pause = 15, end_pause = 15)
 ```
@@ -676,10 +685,12 @@ p <- ggplot() +
   theme(panel.border = element_blank(),
         panel.background = element_blank(),
         plot.background = element_rect(fill = "#FFF9F3", colour = NA),
+        #######################################################################
         plot.margin = margin(10, 50, 10, 50),
         plot.title = element_textbox_simple(family = "Manga Temple", colour = "#3D1308",
                                             halign = 0.5, margin = margin(10, 10, 10, 10)),
         plot.subtitle = element_textbox_simple(family = "Manga Temple", colour = "#3D1308", halign = 0.5),
+        #######################################################################
         plot.caption = element_text(family = "Manga Temple", colour = "#3D1308"))
 
 animate(p, nframes = 151 * 2, start_pause = 15, end_pause = 15)
@@ -719,11 +730,13 @@ p <- ggplot() +
   enter_grow() +
   exit_drift(y_mod = -1) +
   exit_shrink() +
+  #############################################################################
   labs(title = "When do <span style = 'color:#D47FA8'>**cherry blossoms**</span> bloom in Japan?",
        subtitle = paste("<span style = 'color:#D47FA8'>**Hanami**</span> (\"flower viewing\") is a Japanese tradition over 1,000 years old, usually associated with",
                      "cherry blossom trees. The <span style = 'color:#D47FA8'>**sakura zensen**</span> (cherry blossom front) shows the typical date of",
                      "flowering and full bloom across Japan.",
                      "\n"),
+  #############################################################################
        sep = "\n",
        caption = "{paste(month(ymd(\"2019-01-01\") + frame_time, label = TRUE, abbr = FALSE),
                   day(ymd(\"2019-01-01\") + frame_time))}") +
@@ -787,5 +800,7 @@ p <- ggplot() +
         plot.subtitle = element_textbox_simple(size = 20, family = "Manga Temple", colour = "#3D1308", halign = 0.5),
         plot.caption = element_text(size = 32, family = "Manga Temple", colour = "#3D1308"))
 
+#####################################################################
 anim <- animate(p, nframes = 151 * 2, start_pause = 15, end_pause = 15, height = 1600, width = 1100)
+#####################################################################
 ```
