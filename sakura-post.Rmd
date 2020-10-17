@@ -29,7 +29,7 @@ Reference Katherine Goode's great presentation: https://goodekat.github.io/prese
 
 Goal: show the typical flowering and full-bloom dates of sakura (cherry blossom) trees in Japan. We use a dataset from (dataset provenance)
 
-```{r setup, message = FALSE}
+```{r setup, message = FALSE, warning = FALSE}
 library(tidyverse) # Data manipulation
 library(gganimate) # Plot animation
 library(lubridate) # Working with dates
@@ -71,7 +71,7 @@ Animations show subsets of a dataset at different times, so I like to start by s
 
 Let's forget the timing for now and just look at the places.
 
-```{r static-points-only}
+```{r static-points-only, fig.align = 'center', fig.width = 8}
 ggplot() +
   geom_point(data = sakura_overall,
              aes(longitude, latitude))
@@ -93,7 +93,7 @@ To do that, we'll use `transition_reveal()`, which starts us off without any dat
 
 We need to tell `transition_reveal()` when to reveal each data point, which we do with the `along` argument. Here, we'll tell the function to reveal "along" the `flower_doy` variable. All it takes is one line of code:
 
-```{r animation-points-only}
+```{r animation-reveal, fig.align = 'center', fig.width = 8}
 ggplot() +
   geom_point(data = sakura_overall,
              aes(longitude, latitude, group = station_id)) +
@@ -111,7 +111,7 @@ There's one key difference, though: data won't stay visible until the end of the
 
 There's one more complication. `transition_events()` also needs us to specify a window of time for the points to appear and disappear, using the `enter_length` and `exit_length` arguments. These values aren't important right now, but we need to put something in here for the animation to work. I promise we'll come back to these arguments later. For now, let's set them to 1.
 
-```{r animation-points-only}
+```{r animation-events, fig.align = 'center', fig.width = 8}
 ggplot() +
   geom_point(data = sakura_overall,
              aes(longitude, latitude)) +
@@ -129,9 +129,9 @@ ggplot() +
 
 Dynamic labels change depending on where in the animation you are. In our case, we'll add a dynamic label showing the **day of year**, since that is the scale used by our variables for bloom dates. Different `transition_*()` types have different dynamic labels. `transition_events()` uses `frame_time`.
 
-We'll add a `labs()` argument with a `title` argument that includes `frame_time`. We're going to wrap `frame_time` in `{curly braces}`, though, because the braces will tell the function to execute the R code within the braces. If we included `frame_time` *without* the curly braces, our title would literally show "Day of year: frame_time" and wouldn't change along with the animation.
+We'll add a `labs()` argument with a `caption` argument that includes `frame_time`. We're going to wrap `frame_time` in `{curly braces}`, though, because the braces will tell the function to execute the R code within the braces. If we included `frame_time` *without* the curly braces, our title would literally show "Day of year: frame_time" and wouldn't change along with the animation.
 
-```{r animation-points-only-add-title}
+```{r animation-points-only-add-title, fig.align = 'center', fig.width = 8}
 ggplot() +
   geom_point(data = sakura_overall,
              aes(longitude, latitude)) +
@@ -140,13 +140,13 @@ ggplot() +
                     enter_length = 1,
                     exit_length = 1) +
   ###################################################################
-  labs(title = "Day of year: {frame_time}")
+  labs(caption = "Day of year: {frame_time}")
   ###################################################################
 ```
 
 Having day of year to over 10 decimal points of accuracy is distracting. However, since things inside curly braces act like R code, we can wrap the `frame_time` dynamic variable in a function and our title will show the output of that function. So we'll wrap it in a `round()` function to get it to the nearest integer.
 
-```{r animation-points-only-add-title-rounded}
+```{r animation-points-only-add-title-rounded, fig.align = 'center', fig.width = 8}
 ggplot() +
   geom_point(data = sakura_overall,
              aes(longitude, latitude)) +
@@ -155,7 +155,7 @@ ggplot() +
                     enter_length = 1,
                     exit_length = 1) +
   ###################################################################
-  labs(title = "Day of year: {round(frame_time, 0)}")
+  labs(caption = "Day of year: {round(frame_time, 0)}")
   ###################################################################
 ```
 
@@ -174,7 +174,7 @@ Now, we can use the `animate()` function, which gives us more flexibility to twe
 But to add pauses, we need to specify values for the `start_pause` and `end_pause` arguments. These arguments use number of frames (not seconds), which defaults to 10. Let's set both of them 15, which translates into 1.5-second pauses.
 
 
-```{r animation-points-only-add-pauses}
+```{r animation-points-only-add-pauses, fig.align = 'center', fig.width = 8}
 # Assigning plot to p
 p <- ggplot() +
   geom_point(data = sakura_overall,
@@ -183,7 +183,7 @@ p <- ggplot() +
                     end = full_bloom_doy,
                     enter_length = 1,
                     exit_length = 1) +
-  labs(title = "Day of year: {round(frame_time, 0)}")
+  labs(caption = "Day of year: {round(frame_time, 0)}")
 
 #####################################################################
 animate(p, start_pause = 15, end_pause = 15)
@@ -198,7 +198,7 @@ This animation is a map, so borders are a useful reference point! `ggplot2` has 
 We'll also set the `fill` and `colour` so that we have a grey theme. I'm using R's built-in greys `grey##`, where higher numbers give you a lighter grey. I know it's bland, but we'll make the colours more interesting later. Right now we're focused on getting the borders set up.
 
 
-```{r animation-add-borders}
+```{r animation-add-borders, fig.align = 'center', fig.width = 8}
 p <- ggplot() +
   ###################################################################
   borders(regions = "Japan",
@@ -211,7 +211,7 @@ p <- ggplot() +
                     end = full_bloom_doy,
                     enter_length = 1,
                     exit_length = 1) +
-  labs(title = "Day of year: {round(frame_time, 0)}")
+  labs(caption = "Day of year: {round(frame_time, 0)}")
 
 animate(p, start_pause = 15, end_pause = 15)
 ```
@@ -223,7 +223,7 @@ Now that we have borders, the axis labels and gridlines are getting distracting.
 
 One more thing. You probably didn't notice, but Japan is *stretched* compared to what you'd see on most maps. That's because we haven't specified a map projection to use. Let's do that with `coord_map()`, using the familiar [Mercator projection](https://en.wikipedia.org/wiki/Mercator_projection).
 
-```{r animation-add-map-coord-and-theme}
+```{r animation-add-map-coord-and-theme, fig.align = 'center', fig.width = 8}
 p <- ggplot() +
   borders(regions = "Japan",
           fill = "grey95",
@@ -238,7 +238,7 @@ p <- ggplot() +
                     end = full_bloom_doy,
                     enter_length = 1,
                     exit_length = 1) +
-  labs(title = "Day of year: {round(frame_time, 0)}")
+  labs(caption = "Day of year: {round(frame_time, 0)}")
 
 animate(p, start_pause = 15, end_pause = 15)
 ```
@@ -275,7 +275,7 @@ Now we add our `geom_point()` and `geom_text()` layers, specifying the `data` ar
 
 We also added `hjust` (horizontal justification) and `vjust` (vertical justification) arguments to offset the city name from the location point. It can take some fiddling and a few tries to get the positioning exactly right. I tried 5 or 6 different combinations before I got the text positioned right where I wanted it.
 
-```{r animation-add-cities}
+```{r animation-add-cities, fig.align = 'center', fig.width = 8}
 p <- ggplot() +
   borders(regions = "Japan",
           fill = "grey95",
@@ -297,7 +297,7 @@ p <- ggplot() +
                     end = full_bloom_doy,
                     enter_length = 1,
                     exit_length = 1) +
-  labs(title = "Day of year: {round(frame_time, 0)}")
+  labs(caption = "Day of year: {round(frame_time, 0)}")
 
 animate(p, start_pause = 15, end_pause = 15)
 ```
@@ -312,7 +312,7 @@ We're going to replace our `geom_point()` function with `geom_image()`, from the
 
 Speaking of fiddling, I had to try several values for the `size` argument. You may have to do the same.
 
-```{r animation-add-sakura-image}
+```{r animation-add-sakura-image, fig.align = 'center', fig.width = 8}
 p <- ggplot() +
   borders(regions = "Japan",
           fill = "grey95",
@@ -335,22 +335,29 @@ p <- ggplot() +
                     end = full_bloom_doy,
                     enter_length = 1,
                     exit_length = 1) +
-  labs(title = "Day of year: {round(frame_time, 0)}")
+  labs(caption = "Day of year: {round(frame_time, 0)}")
 
 animate(p, start_pause = 15, end_pause = 15)
 ```
 
 
-### 10. Convert dynamic title to calendar date
+### 10. Convert dynamic day-of-year to calendar date
 
-This step is a bit of a hack. If there are better ways to do it, I'd love to learn them. But this method, though ugly, at least works.
+(Note: This step is a bit of a hack. If there are better ways to do it, I'd love to learn them. This method is ugly...but it works.)
 
-We want to convert day of year into a simple calendar date, like "January 1" or "April 15". (Apologies to my non-North American friends for how I'm formatting the date!)
+Our dynamic label currently shows day-of-year, which isn't a very intuitive way to think about dates. Calendar dates are better. For example, "April 15" is more meaningful than "Day 106". So let's change our dynamic label to be a calendar date.
 
-- Converting day of year into date by adding the `frame_time`, which uses day of the year, to a "base date". Here, we use "2019-01-01". We need a year because date objects need to be a specific date, which requires year. And we use 2019 -- instead of 2020, when this post was written -- because 2020 is a leap year and we don't to include that extra day in February.
-- Converting that date into a format that shows only month and day (technically, the labels are in 2019, but we're just hiding the year so that we get a more generic calendar date)
+(WARNING: Hackiness starts here.)
 
-```{r animation-convert-to-date}
+My approach has two steps. First, we convert the format of `frame_time` (the dynamic label) from numeric -- which is inherited from `flower_doy` and `full_bloom_doy` -- to a date. We do this by adding the (numeric) `frame_time` to January 1. Because of how R handles addition with dates, we end up converting day-of-year to an actual calendar date.
+
+The catch is that date objects *need* to have a year. So our January 1 "base date" needs to be January 1 of a specific. We're going to use "2019-01-01" as our base date. Why? I'm writing in 2020 and 2019 is the most recent non-leap year. (We don't want our generic calendar dates to have a February 29.) I could have just as easily used 2018, 2017, or even 1967.
+
+I do all this conversion in curly braces in the `labs()` function's `caption` argument: pass `"2019-01-01"` into `{lubridate}`'s `ymd()` to convert text into date format, then add `frame_time`. Note that I had to add backslashes `\` before the quotation marks in `"2019-01-01"` as escape characters. If I hadn't added the backslashes, R would interpret those quotation marks as the end of the text argument of `caption` instead of *part* of the text argument. (I warned you it was hacky. Sorry :( )
+
+How does this look?
+
+```{r animation-convert-to-date, fig.align = 'center', fig.width = 8}
 p <- ggplot() +
   borders(regions = "Japan",
           fill = "grey95",
@@ -372,13 +379,22 @@ p <- ggplot() +
                     enter_length = 1,
                     exit_length = 1) +
   ###################################################################
-  labs(title = "{ymd(\"2019-01-01\") + frame_time}")
+  labs(caption = "{ymd(\"2019-01-01\") + frame_time}")
   ###################################################################
 
 animate(p, start_pause = 15, end_pause = 15)
 ```
 
-```{r animation-convert-to-date-no-year}
+Second, we convert the [ISO 8601](https://en.wikipedia.org/wiki/ISO_8601)-formatted date to a generic calendar date, like "April 15". (Apologies to non-North American readers.) I did this by extracting the month and day from the date we calculated in step one and formatting it how I wanted:
+
+- The `month()` function returns a number by default, so setting `label = TRUE` and `abbr = FALSE` gets us unabbreviated month names, like "April".
+- The `day()` function is fine as-is. It returns a number, which is what we want.
+
+Next, I used `paste()` to combine the two into a single string.
+
+The date we're seeing is *technically* 2019, but since we don't show the year, it serves just fine as a generic calendar date.
+
+```{r animation-convert-to-date-no-year, fig.align = 'center', fig.width = 8}
 p <- ggplot() +
   borders(regions = "Japan",
           fill = "grey95",
@@ -400,7 +416,7 @@ p <- ggplot() +
                     enter_length = 1,
                     exit_length = 1) +
   #############################################################################
-  labs(title = "{paste(month(ymd(\"2019-01-01\") + frame_time, label = TRUE, abbr = FALSE),
+  labs(caption = "{paste(month(ymd(\"2019-01-01\") + frame_time, label = TRUE, abbr = FALSE),
                   day(ymd(\"2019-01-01\") + frame_time))}")
   #############################################################################
 
@@ -408,13 +424,16 @@ animate(p, start_pause = 15, end_pause = 15)
 ```
 
 
+
 ### 11. Change font
 
-If you haven't used `{extrafont}` before, you'll need to do some setup (GitHub README: https://github.com/wch/extrafont).
+Let's use a more interesting font. There are a couple different ways to use custom fonts in R. I used the `{extrafont}` package. Getting it set up is its own tutorial, but if you haven't used it before, the [setup instructions](https://github.com/wch/extrafont) are pretty good.
 
-I used the Manga Temple font (https://www.dafont.com/manga-temple.font) by Blambot (https://twitter.com/blambot). Note that it's free for personal use, but not for commercial use. Full licence details are here: https://blambot.com/pages/licenses
+I used the [Manga Temple](https://www.dafont.com/manga-temple.font) font by [Blambot](https://twitter.com/blambot).
 
-```{r animation-change-font}
+Once we go through `{extrafont}`'s process for using downloaded fonts, we change our `geom_text()` and `theme()` functions to include an argument that specifies Manga Temple as the font to use.
+
+```{r animation-change-font, fig.align = 'center', fig.width = 8}
 p <- ggplot() +
   borders(regions = "Japan",
           fill = "grey95",
@@ -438,7 +457,7 @@ p <- ggplot() +
                     end = full_bloom_doy,
                     enter_length = 1,
                     exit_length = 1) +
-  labs(title = "{paste(month(ymd(\"2019-01-01\") + frame_time, label = TRUE, abbr = FALSE),
+  labs(caption = "{paste(month(ymd(\"2019-01-01\") + frame_time, label = TRUE, abbr = FALSE),
                   day(ymd(\"2019-01-01\") + frame_time))}") +
   ###################################################################
   theme(text = element_text(family = "Manga Temple"))
@@ -450,9 +469,21 @@ animate(p, start_pause = 15, end_pause = 15)
 
 ### 12. Change colour palette
 
-Colour of land, background, and font. Going for a creamy/brown vibe.
+Let's finally get away from this drab grey colour palette. I wanted something warm that was evocative of old maps, so I went with a cream/brown palette. I got the specific hex values for colours by literally Googling "old maps" and using a colour eyedropper Chrome extension. I ended up with three colours:
 
-```{r animation-change-colour}
+- <span style = 'color:#FFF9F3'>Cream</span> for the background
+- <span style = 'color:#AA9C8F'>Medium Brown</span> for Japan's landmass
+- <span style = 'color:#3D1308'>Dark Brown</span> for points and text
+
+We need to change colour in four places:
+
+1. `borders()` for the landmass
+1. `geom_point()` for the city location points
+1. `geom_text()` for the city names text
+1. `theme()` for description text (`text` argument) and background (`plot.background` argument)
+
+
+```{r animation-change-colour, fig.align = 'center', fig.width = 8}
 p <- ggplot() +
   ###################################################################
   borders(regions = "Japan",
@@ -482,7 +513,7 @@ p <- ggplot() +
                     end = full_bloom_doy,
                     enter_length = 1,
                     exit_length = 1) +
-  labs(title = "{paste(month(ymd(\"2019-01-01\") + frame_time, label = TRUE, abbr = FALSE),
+  labs(caption = "{paste(month(ymd(\"2019-01-01\") + frame_time, label = TRUE, abbr = FALSE),
                   day(ymd(\"2019-01-01\") + frame_time))}") +
   #############################################################################
   theme(text = element_text(family = "Manga Temple", colour = "#3D1308"),
@@ -495,12 +526,12 @@ animate(p, start_pause = 15, end_pause = 15)
 ```
 
 
-
+# START HERE -- ALMOST DONE!
 ### 13. Tweak enter and exit animations
 
 Using `enter_grow()` and `exit_shrink()`. Also using `exit_drift()` with its `y_mod` argument so that they "fall" and shrink simultaneously as they exit. `exit_*()` functions can be combined to get neat behaviours like this.
 
-```{r add-growing-shrinking-transition}
+```{r add-growing-shrinking-transition, fig.align = 'center', fig.width = 8}
 p <- ggplot() +
   borders(regions = "Japan",
           fill = "#AA9C8F",
@@ -530,7 +561,7 @@ p <- ggplot() +
   exit_drift(y_mod = -1) +
   exit_shrink() +
   ###################################################################
-  labs(title = "{paste(month(ymd(\"2019-01-01\") + frame_time, label = TRUE, abbr = FALSE),
+  labs(caption = "{paste(month(ymd(\"2019-01-01\") + frame_time, label = TRUE, abbr = FALSE),
                   day(ymd(\"2019-01-01\") + frame_time))}") +
   theme(text = element_text(family = "Manga Temple", colour = "#3D1308"),
         panel.border = element_blank(),
@@ -544,7 +575,7 @@ animate(p, start_pause = 15, end_pause = 15)
 
 ### 14. Slow overall animation speed
 
-```{r animation-slow-speed}
+```{r animation-slow-speed, fig.align = 'center', fig.width = 8}
 p <- ggplot() +
   borders(regions = "Japan",
           fill = "#AA9C8F",
@@ -572,7 +603,7 @@ p <- ggplot() +
   enter_grow() +
   exit_drift(y_mod = -1) +
   exit_shrink() +
-  labs(title = "{paste(month(ymd(\"2019-01-01\") + frame_time, label = TRUE, abbr = FALSE),
+  labs(caption = "{paste(month(ymd(\"2019-01-01\") + frame_time, label = TRUE, abbr = FALSE),
                   day(ymd(\"2019-01-01\") + frame_time))}") +
   theme(text = element_text(family = "Manga Temple", colour = "#3D1308"),
         panel.border = element_blank(),
@@ -590,7 +621,7 @@ animate(p, nframes = 151 * 2, start_pause = 15, end_pause = 15)
 
 Title text and basic formatting of size, etc.
 
-```{r animation-add-title}
+```{r animation-add-title, fig.align = 'center', fig.width = 8}
 p <- ggplot() +
   borders(regions = "Japan",
           fill = "#AA9C8F",
@@ -637,7 +668,7 @@ p <- ggplot() +
         plot.caption = element_text(family = "Manga Temple", colour = "#3D1308"))
         ###################################################
 
-animate(p, nframes = 151 * 2, start_pause = 15, end_pause = 15)
+animate(p, nframes = 151 * 2, start_pause = 15, end_pause = 15, height = 715, width = 500)
 ```
 
 
@@ -646,7 +677,7 @@ animate(p, nframes = 151 * 2, start_pause = 15, end_pause = 15)
 
 Very fiddly step. I often spend a lot of time on this step making sure everything is just right, through trial and error. Specifically mention `halign` and `margin` arguments.
 
-```{r animation-adjust-title-size-location}
+```{r animation-adjust-title-size-location, fig.align = 'center', fig.width = 8}
 p <- ggplot() +
   borders(regions = "Japan",
           fill = "#AA9C8F",
@@ -693,7 +724,7 @@ p <- ggplot() +
         #######################################################################
         plot.caption = element_text(family = "Manga Temple", colour = "#3D1308"))
 
-animate(p, nframes = 151 * 2, start_pause = 15, end_pause = 15)
+animate(p, nframes = 151 * 2, start_pause = 15, end_pause = 15, height = 715, width = 500)
 ```
 
 
@@ -702,7 +733,7 @@ animate(p, nframes = 151 * 2, start_pause = 15, end_pause = 15)
 
 The `<span>` tags are intimidating, but you get used to them. `ggtext` overview here: https://github.com/wilkelab/ggtext
 
-```{r animation-add-colour-to-title}
+```{r animation-add-colour-to-title, fig.align = 'center', fig.width = 8}
 p <- ggplot() +
   borders(regions = "Japan",
           fill = "#AA9C8F",
@@ -749,58 +780,5 @@ p <- ggplot() +
         plot.subtitle = element_textbox_simple(size = 8, family = "Manga Temple", colour = "#3D1308", halign = 0.5),
         plot.caption = element_text(size = 14, family = "Manga Temple", colour = "#3D1308"))
 
-animate(p, nframes = 151 * 2, start_pause = 15, end_pause = 15)
-```
-
-
-
-```{r final-for-now-animation-brown}
-p <- ggplot() +
-  borders(regions = "Japan",
-          fill = "#AA9C8F",
-          colour = NA) +
-  geom_point(data = sakura_labels,
-             aes(longitude, latitude),
-             size = 2,
-             colour = "#3D1308") +
-  geom_text(data = sakura_labels,
-            aes(longitude, latitude, label = station_name),
-            size = 8,
-            colour = "#3D1308",
-            family = "Manga Temple",
-            hjust = -0.2,
-            vjust = 1) +
-  geom_image(data = sakura_overall,
-             aes(longitude, latitude, image = "sakura-no-border.svg"),
-             size = 0.028) +
-  coord_map(projection = "mercator") +
-  theme_map() +
-  transition_events(start = flower_doy - 3,
-                    end = full_bloom_doy,
-                    range(0, 151),
-                    enter_length = 6,
-                    exit_length = 6) +
-  enter_grow() +
-  exit_drift(y_mod = -1) +
-  exit_shrink() +
-  labs(title = "When do <span style = 'color:#D47FA8'>**cherry blossoms**</span> bloom in Japan?",
-  subtitle = paste("<span style = 'color:#D47FA8'>**Hanami**</span> (\"flower viewing\") is a Japanese tradition over 1,000 years old, usually associated with",
-                     "cherry blossom trees. The <span style = 'color:#D47FA8'>**sakura zensen**</span> (cherry blossom front) shows the typical date of",
-                     "flowering and full bloom across Japan.",
-                     "\n"),
-                     sep = "\n",
-  caption = "{paste(month(ymd(\"2019-01-01\") + frame_time, label = TRUE, abbr = FALSE),
-                  day(ymd(\"2019-01-01\") + frame_time))}") +
-  theme(panel.border = element_blank(),
-        panel.background = element_blank(),
-        plot.background = element_rect(fill = "#FFF9F3", colour = NA),
-        plot.margin = margin(10, 50, 10, 50),
-        plot.title = element_textbox_simple(size = 32, family = "Manga Temple", colour = "#3D1308",
-                                            halign = 0.5, margin = margin(10, 10, -40, 10)),
-        plot.subtitle = element_textbox_simple(size = 20, family = "Manga Temple", colour = "#3D1308", halign = 0.5),
-        plot.caption = element_text(size = 32, family = "Manga Temple", colour = "#3D1308"))
-
-#####################################################################
-anim <- animate(p, nframes = 151 * 2, start_pause = 15, end_pause = 15, height = 1600, width = 1100)
-#####################################################################
+animate(p, nframes = 151 * 2, start_pause = 15, end_pause = 15, height = 715, width = 500)
 ```
