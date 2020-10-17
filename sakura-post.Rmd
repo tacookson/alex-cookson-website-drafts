@@ -31,14 +31,14 @@ Goal: show the typical flowering and full-bloom dates of sakura (cherry blossom)
 
 ```{r setup, message = FALSE, warning = FALSE}
 library(tidyverse) # Data manipulation
-library(gganimate) # Plot animation
+library(gganimate) # Animation
 library(lubridate) # Working with dates
 library(ggthemes) # ggplot2 theme for maps
 library(ggimage) # Images in ggplot2 plots
 library(extrafont) # Custom fonts
-library(ggtext) # Customising text
+library(ggtext) # Customising text colour in titles
 
-library(kableExtra) # Nice tables (only needed for blog post)
+library(kableExtra) # Nicely-formatted tables (you don't need this; it's just for the blog post)
 
 sakura <- read_csv("https://raw.githubusercontent.com/tacookson/data/master/sakura-flowering/sakura-modern.csv")
 ```
@@ -56,6 +56,8 @@ sakura_overall <- sakura %>%
             full_bloom_doy = mean(full_bloom_doy),
             .groups = "drop")
 
+# Show what the data looks like
+# (You don't need this; it's just for the blog post)
 sakura_overall %>%
   head() %>%
   kable(format = "html") %>%
@@ -71,7 +73,7 @@ Animations show subsets of a dataset at different times, so I like to start by s
 
 Let's forget the timing for now and just look at the places.
 
-```{r static-points-only, fig.align = 'center', fig.width = 8}
+```{r static-points-only, fig.align = 'center', fig.width = 6}
 ggplot() +
   geom_point(data = sakura_overall,
              aes(longitude, latitude))
@@ -93,7 +95,7 @@ To do that, we'll use `transition_reveal()`, which starts us off without any dat
 
 We need to tell `transition_reveal()` when to reveal each data point, which we do with the `along` argument. Here, we'll tell the function to reveal "along" the `flower_doy` variable. All it takes is one line of code:
 
-```{r animation-reveal, fig.align = 'center', fig.width = 8}
+```{r animation-reveal, fig.align = 'center', fig.width = 6}
 ggplot() +
   geom_point(data = sakura_overall,
              aes(longitude, latitude, group = station_id)) +
@@ -109,7 +111,7 @@ There's one key difference, though: data won't stay visible until the end of the
 
 There's one more complication. `transition_events()` also needs us to specify a window of time for the points to appear and disappear, using the `enter_length` and `exit_length` arguments. These values aren't important right now, but we need to put something in here for the animation to work. I promise we'll come back to these arguments later. For now, let's set them to 1.
 
-```{r animation-events, fig.align = 'center', fig.width = 8}
+```{r animation-events, fig.align = 'center', fig.width = 6}
 ggplot() +
   geom_point(data = sakura_overall,
              aes(longitude, latitude)) +
@@ -127,7 +129,7 @@ Dynamic labels change depending on where in the animation you are. In our case, 
 
 We'll add a `labs()` argument with a `caption` argument that includes `frame_time`. We're going to wrap `frame_time` in `{curly braces}`, though, because the braces will tell the function to execute the R code within the braces. If we included `frame_time` *without* the curly braces, our title would literally show "Day of year: frame_time" and wouldn't change along with the animation.
 
-```{r animation-points-only-add-title, fig.align = 'center', fig.width = 8}
+```{r animation-points-only-add-title, fig.align = 'center', fig.width = 6}
 ggplot() +
   geom_point(data = sakura_overall,
              aes(longitude, latitude)) +
@@ -140,7 +142,7 @@ ggplot() +
 
 Having day of year to over 10 decimal points of accuracy is distracting. However, since things inside curly braces act like R code, we can wrap the `frame_time` dynamic variable in a function and our title will show the output of that function. So we'll wrap it in a `round()` function to get it to the nearest integer.
 
-```{r animation-points-only-add-title-rounded, fig.align = 'center', fig.width = 8}
+```{r animation-points-only-add-title-rounded, fig.align = 'center', fig.width = 6}
 ggplot() +
   geom_point(data = sakura_overall,
              aes(longitude, latitude)) +
@@ -165,6 +167,8 @@ Now, we can use the `animate()` function, which gives us more flexibility to twe
 
 But to add pauses, we need to specify values for the `start_pause` and `end_pause` arguments. These arguments use number of frames (not seconds), which defaults to 10. Let's set both of them 15, which translates into 1.5-second pauses.
 
+(I also add `height` and `width` arguments so that the animation is a good size for this post. These are optional if you're doing this on your own.)
+
 
 ```{r animation-points-only-add-pauses, fig.align = 'center', fig.width = 8}
 # Assigning plot to p
@@ -177,7 +181,7 @@ p <- ggplot() +
                     exit_length = 1) +
   labs(caption = "Day of year: {round(frame_time, 0)}")
 
-animate(p, start_pause = 15, end_pause = 15) ###
+animate(p, start_pause = 15, end_pause = 15, height = 715, width = 600) ###
 ```
 
 
@@ -201,7 +205,7 @@ p <- ggplot() +
                     exit_length = 1) +
   labs(caption = "Day of year: {round(frame_time, 0)}")
 
-animate(p, start_pause = 15, end_pause = 15)
+animate(p, start_pause = 15, end_pause = 15, height = 715, width = 600)
 ```
 
 
@@ -226,7 +230,7 @@ p <- ggplot() +
                     exit_length = 1) +
   labs(caption = "Day of year: {round(frame_time, 0)}")
 
-animate(p, start_pause = 15, end_pause = 15)
+animate(p, start_pause = 15, end_pause = 15, height = 715, width = 600)
 ```
 
 
@@ -283,7 +287,7 @@ p <- ggplot() +
                     exit_length = 1) +
   labs(caption = "Day of year: {round(frame_time, 0)}")
 
-animate(p, start_pause = 15, end_pause = 15)
+animate(p, start_pause = 15, end_pause = 15, height = 715, width = 600)
 ```
 
 
@@ -319,7 +323,7 @@ p <- ggplot() +
                     exit_length = 1) +
   labs(caption = "Day of year: {round(frame_time, 0)}")
 
-animate(p, start_pause = 15, end_pause = 15)
+animate(p, start_pause = 15, end_pause = 15, height = 715, width = 600)
 ```
 
 
@@ -362,7 +366,7 @@ p <- ggplot() +
                     exit_length = 1) +
   labs(caption = "{ymd(\"2019-01-01\") + frame_time}") ###
 
-animate(p, start_pause = 15, end_pause = 15)
+animate(p, start_pause = 15, end_pause = 15, height = 715, width = 600)
 ```
 
 Second, we convert the [ISO 8601](https://en.wikipedia.org/wiki/ISO_8601)-formatted date to a generic calendar date, like "April 15". (Apologies to non-North American readers.) I did this by extracting the month and day from the date we calculated in step one and formatting it how I wanted:
@@ -397,7 +401,7 @@ p <- ggplot() +
                     exit_length = 1) +
   labs(caption = "{paste(month(ymd(\"2019-01-01\") + frame_time, label = TRUE, abbr = FALSE), day(ymd(\"2019-01-01\") + frame_time))}") ###
 
-animate(p, start_pause = 15, end_pause = 15)
+animate(p, start_pause = 15, end_pause = 15, height = 715, width = 600)
 ```
 
 
@@ -436,7 +440,7 @@ p <- ggplot() +
                   day(ymd(\"2019-01-01\") + frame_time))}") +
   theme(text = element_text(family = "Manga Temple")) ###
 
-animate(p, start_pause = 15, end_pause = 15)
+animate(p, start_pause = 15, end_pause = 15, height = 715, width = 600)
 ```
 
 
@@ -487,14 +491,25 @@ p <- ggplot() +
         panel.background = element_blank(),
         plot.background = element_rect(fill = "#FFF9F3", colour = NA))    ###
 
-animate(p, start_pause = 15, end_pause = 15)
+animate(p, start_pause = 15, end_pause = 15, height = 715, width = 600)
 ```
 
 
-# START HERE -- ALMOST DONE!
 ### 13. Tweak enter and exit animations
 
-Using `enter_grow()` and `exit_shrink()`. Also using `exit_drift()` with its `y_mod` argument so that they "fall" and shrink simultaneously as they exit. `exit_*()` functions can be combined to get neat behaviours like this.
+Now let's make the animations more nuanced. Our sakura icons are appearing a disappearing instantly, which is a bit jarring. Let's try for something more peaceful and organic, to reflect our subject. Specifically, let's mimic the blossoms themselves. Have them grow and "bloom" when they appear, then fall away when they disappear. To do this, we'll use `{gganimate}`'s `enter_*()` and `exit_*()` functions, which specify animations for data appearing and disappearing from the plot.
+
+For the "blooming", we'll use `enter_grow()`, which starts our sakura icon small and grows to the size we specify.
+
+For the falling away, we'll use two transitions, which will happen at the same time: `exit_shrink()`, which shrinks the icon to a small point before disappearing, and `exit_drift()`, which shifts the icon in a direction we specify before disappearing.
+
+`exit_drift()` can take two arguments: `x_mod` for horizontal movement and `y_mod` for vertical movement. (You can combine them for diagonal movement.) Since we want our blossoms to "fall", we set `y_mod` to a negative value.
+
+While we're at it, let's also change the timing of enter and exit animations. Previously, we gave the icons one day to enter and one day to exit. We'll do three tweaks:
+
+1. Start the enter animation three days before the flower date
+1. Give the enter and exit animations six days to do their thing. This matters now that we actually have animations that take time. Previously, we set `enter_length` and `exit_length` to 1, which didn't matter because the icons were appearing instantly.
+1. Set the `range` argument. This part is new. By default, the animation starts at the lowest value in our data and stops at the highest value, but this ends us starting the animation on January 8 and ending it on May 26. Setting a custom range argument gets us "round" dates. In our case, `range = c(0, 151)` starts us on January 1 and ends us on June 1.
 
 ```{r add-growing-shrinking-transition, fig.align = 'center', fig.width = 8}
 p <- ggplot() +
@@ -531,12 +546,15 @@ p <- ggplot() +
         panel.background = element_blank(),
         plot.background = element_rect(fill = "#FFF9F3", colour = NA))
 
-animate(p, start_pause = 15, end_pause = 15)
+animate(p, start_pause = 15, end_pause = 15, height = 715, width = 600)
 ```
 
 
-
 ### 14. Slow overall animation speed
+
+Looks nice, but it feels to fast for the subject matter. I mentioned that I'm going for a peaceful, organic feel to the animation, but it feels rushed. `animate()` defaults to 100 frames at 10 FPS (frames per second), giving us a default animation of 10 seconds (plus the 1.5-second pauses we added at the start and end).
+
+We can adjust the duration directly with the `duration` argument. We can also adjust duration indirectly with the `nframes` argument. More frames at the default 10 FPS means longer duration. I'm going to use the `nframes` method to make sure each day gets an equal number of frames. We have 152 days in the animation (remember last step when we set the range from 0 to 151?). So If we set `nframes = 152 * 2`, that will ensure each day lasts 2 frames, which is equivalent to one fifth of a second.
 
 ```{r animation-slow-speed, fig.align = 'center', fig.width = 8}
 p <- ggplot() +
@@ -573,11 +591,11 @@ p <- ggplot() +
         panel.background = element_blank(),
         plot.background = element_rect(fill = "#FFF9F3", colour = NA))
 
-animate(p, nframes = 151 * 2, start_pause = 15, end_pause = 15) ###
+animate(p, nframes = 152 * 2, start_pause = 15, end_pause = 15, height = 715, width = 600) ###
 ```
 
 
-
+# START HERE -- ALMOST DONE!
 ### 15. Add title and explanation blurb
 
 Title text and basic formatting of size, etc.
@@ -625,7 +643,7 @@ p <- ggplot() +
         plot.subtitle = element_textbox_simple(family = "Manga Temple", colour = "#3D1308"), ###
         plot.caption = element_text(family = "Manga Temple", colour = "#3D1308"))            ###
 
-animate(p, nframes = 151 * 2, start_pause = 15, end_pause = 15, height = 715, width = 500)
+animate(p, nframes = 152 * 2, start_pause = 15, end_pause = 15, height = 715, width = 600)
 ```
 
 
@@ -679,7 +697,7 @@ p <- ggplot() +
         plot.subtitle = element_textbox_simple(family = "Manga Temple", colour = "#3D1308", halign = 0.5), ###
         plot.caption = element_text(family = "Manga Temple", colour = "#3D1308"))
 
-animate(p, nframes = 151 * 2, start_pause = 15, end_pause = 15, height = 715, width = 500)
+animate(p, nframes = 152 * 2, start_pause = 15, end_pause = 15, height = 715, width = 600)
 ```
 
 
@@ -735,5 +753,5 @@ p <- ggplot() +
         plot.subtitle = element_textbox_simple(size = 8, family = "Manga Temple", colour = "#3D1308", halign = 0.5),
         plot.caption = element_text(size = 14, family = "Manga Temple", colour = "#3D1308"))
 
-animate(p, nframes = 151 * 2, start_pause = 15, end_pause = 15, height = 715, width = 500)
+animate(p, nframes = 152 * 2, start_pause = 15, end_pause = 15, height = 715, width = 600)
 ```
