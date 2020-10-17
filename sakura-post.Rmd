@@ -97,9 +97,7 @@ We need to tell `transition_reveal()` when to reveal each data point, which we d
 ggplot() +
   geom_point(data = sakura_overall,
              aes(longitude, latitude, group = station_id)) +
-  ###################################################################
-  transition_reveal(along = flower_doy)
-  ###################################################################
+  transition_reveal(along = flower_doy) ###
 ```
 
 
@@ -115,12 +113,10 @@ There's one more complication. `transition_events()` also needs us to specify a 
 ggplot() +
   geom_point(data = sakura_overall,
              aes(longitude, latitude)) +
-  ###################################################################
-  transition_events(start = flower_doy,
-                    end = full_bloom_doy,
-                    enter_length = 1,
-                    exit_length = 1)
-  ###################################################################
+  transition_events(start = flower_doy,   ###
+                    end = full_bloom_doy, ###
+                    enter_length = 1,     ###
+                    exit_length = 1)      ###
 ```
 
 
@@ -139,9 +135,7 @@ ggplot() +
                     end = full_bloom_doy,
                     enter_length = 1,
                     exit_length = 1) +
-  ###################################################################
-  labs(caption = "Day of year: {frame_time}")
-  ###################################################################
+  labs(caption = "Day of year: {frame_time}") ###
 ```
 
 Having day of year to over 10 decimal points of accuracy is distracting. However, since things inside curly braces act like R code, we can wrap the `frame_time` dynamic variable in a function and our title will show the output of that function. So we'll wrap it in a `round()` function to get it to the nearest integer.
@@ -154,9 +148,7 @@ ggplot() +
                     end = full_bloom_doy,
                     enter_length = 1,
                     exit_length = 1) +
-  ###################################################################
-  labs(caption = "Day of year: {round(frame_time, 0)}")
-  ###################################################################
+  labs(caption = "Day of year: {round(frame_time, 0)}") ###
 ```
 
 Much better!
@@ -185,9 +177,7 @@ p <- ggplot() +
                     exit_length = 1) +
   labs(caption = "Day of year: {round(frame_time, 0)}")
 
-#####################################################################
-animate(p, start_pause = 15, end_pause = 15)
-#####################################################################
+animate(p, start_pause = 15, end_pause = 15) ###
 ```
 
 
@@ -200,11 +190,9 @@ We'll also set the `fill` and `colour` so that we have a grey theme. I'm using R
 
 ```{r animation-add-borders, fig.align = 'center', fig.width = 8}
 p <- ggplot() +
-  ###################################################################
-  borders(regions = "Japan",
-          fill = "grey95",
-          colour = "grey50") +
-  ###################################################################
+  borders(regions = "Japan",   ###
+          fill = "grey95",     ###
+          colour = "grey50") + ###
   geom_point(data = sakura_overall,
              aes(longitude, latitude)) +
   transition_events(start = flower_doy,
@@ -230,10 +218,8 @@ p <- ggplot() +
           colour = "grey50") +
   geom_point(data = sakura_overall,
              aes(longitude, latitude)) +
-  ###################################################################
-  coord_map(projection = "mercator") +
-  theme_map() +
-  ###################################################################
+  coord_map(projection = "mercator") + ###
+  theme_map() +                        ###
   transition_events(start = flower_doy,
                     end = full_bloom_doy,
                     enter_length = 1,
@@ -280,15 +266,13 @@ p <- ggplot() +
   borders(regions = "Japan",
           fill = "grey95",
           colour = "grey50") +
-  ###################################################################
-  geom_point(data = sakura_labels,
-             aes(longitude, latitude),
-             size = 1) +
-  geom_text(data = sakura_labels,
-            aes(longitude, latitude, label = station_name),
-            hjust = -0.2,
-            vjust = 1) +
-  ###################################################################
+  geom_point(data = sakura_labels,                          ###
+             aes(longitude, latitude),                      ###
+             size = 1) +                                    ###
+  geom_text(data = sakura_labels,                           ###
+            aes(longitude, latitude, label = station_name), ###
+            hjust = -0.2,                                   ###
+            vjust = 1) +                                    ###
   geom_point(data = sakura_overall,
              aes(longitude, latitude)) +
   coord_map(projection = "mercator") +
@@ -324,11 +308,9 @@ p <- ggplot() +
             aes(longitude, latitude, label = station_name),
             hjust = -0.2,
             vjust = 1) +
-  ###################################################################
-  geom_image(data = sakura_overall,
-             aes(longitude, latitude, image = "sakura-no-border.svg"),
-             size = 0.03) +
-  ###################################################################
+  geom_image(data = sakura_overall,                                    ###
+             aes(longitude, latitude, image = "sakura-no-border.svg"), ###
+             size = 0.03) +                                            ###
   coord_map(projection = "mercator") +
   theme_map() +
   transition_events(start = flower_doy,
@@ -378,9 +360,7 @@ p <- ggplot() +
                     end = full_bloom_doy,
                     enter_length = 1,
                     exit_length = 1) +
-  ###################################################################
-  labs(caption = "{ymd(\"2019-01-01\") + frame_time}")
-  ###################################################################
+  labs(caption = "{ymd(\"2019-01-01\") + frame_time}") ###
 
 animate(p, start_pause = 15, end_pause = 15)
 ```
@@ -415,10 +395,7 @@ p <- ggplot() +
                     end = full_bloom_doy,
                     enter_length = 1,
                     exit_length = 1) +
-  #############################################################################
-  labs(caption = "{paste(month(ymd(\"2019-01-01\") + frame_time, label = TRUE, abbr = FALSE),
-                  day(ymd(\"2019-01-01\") + frame_time))}")
-  #############################################################################
+  labs(caption = "{paste(month(ymd(\"2019-01-01\") + frame_time, label = TRUE, abbr = FALSE), day(ymd(\"2019-01-01\") + frame_time))}") ###
 
 animate(p, start_pause = 15, end_pause = 15)
 ```
@@ -443,9 +420,7 @@ p <- ggplot() +
              size = 1) +
   geom_text(data = sakura_labels,
             aes(longitude, latitude, label = station_name),
-            #####################################
-            family = "Manga Temple",
-            #####################################
+            family = "Manga Temple", ###
             hjust = -0.2,
             vjust = 1) +
   geom_image(data = sakura_overall,
@@ -459,9 +434,7 @@ p <- ggplot() +
                     exit_length = 1) +
   labs(caption = "{paste(month(ymd(\"2019-01-01\") + frame_time, label = TRUE, abbr = FALSE),
                   day(ymd(\"2019-01-01\") + frame_time))}") +
-  ###################################################################
-  theme(text = element_text(family = "Manga Temple"))
-  ###################################################################
+  theme(text = element_text(family = "Manga Temple")) ###
 
 animate(p, start_pause = 15, end_pause = 15)
 ```
@@ -471,9 +444,9 @@ animate(p, start_pause = 15, end_pause = 15)
 
 Let's finally get away from this drab grey colour palette. I wanted something warm that was evocative of old maps, so I went with a cream/brown palette. I got the specific hex values for colours by literally Googling "old maps" and using a colour eyedropper Chrome extension. I ended up with three colours:
 
-- <span style = 'color:#FFF9F3'>Cream</span> for the background
-- <span style = 'color:#AA9C8F'>Medium Brown</span> for Japan's landmass
-- <span style = 'color:#3D1308'>Dark Brown</span> for points and text
+- <span style = 'color:#FFF9F3'>**Cream**</span> for the background
+- <span style = 'color:#AA9C8F'>**Medium Brown**</span> for Japan's landmass
+- <span style = 'color:#3D1308'>**Dark Brown**</span> for points and text
 
 We need to change colour in four places:
 
@@ -485,22 +458,16 @@ We need to change colour in four places:
 
 ```{r animation-change-colour, fig.align = 'center', fig.width = 8}
 p <- ggplot() +
-  ###################################################################
   borders(regions = "Japan",
-          fill = "#AA9C8F",
-          colour = NA) +
-  ###################################################################
+          fill = "#AA9C8F", ###
+          colour = NA) +    ###
   geom_point(data = sakura_labels,
              aes(longitude, latitude),
              size = 1,
-             ##########################
-             colour = "#3D1308") +
-             ##########################
+             colour = "#3D1308") + ###
   geom_text(data = sakura_labels,
             aes(longitude, latitude, label = station_name),
-            ###########################
-            colour = "#3D1308",
-            ###########################
+            colour = "#3D1308", ###
             family = "Manga Temple",
             hjust = -0.2,
             vjust = 1) +
@@ -515,12 +482,10 @@ p <- ggplot() +
                     exit_length = 1) +
   labs(caption = "{paste(month(ymd(\"2019-01-01\") + frame_time, label = TRUE, abbr = FALSE),
                   day(ymd(\"2019-01-01\") + frame_time))}") +
-  #############################################################################
-  theme(text = element_text(family = "Manga Temple", colour = "#3D1308"),
+  theme(text = element_text(family = "Manga Temple", colour = "#3D1308"), ###
         panel.border = element_blank(),
         panel.background = element_blank(),
-        plot.background = element_rect(fill = "#FFF9F3", colour = NA))
-  #############################################################################
+        plot.background = element_rect(fill = "#FFF9F3", colour = NA))    ###
 
 animate(p, start_pause = 15, end_pause = 15)
 ```
@@ -551,16 +516,14 @@ p <- ggplot() +
              size = 0.03) +
   coord_map(projection = "mercator") +
   theme_map() +
-  ###################################################################
-  transition_events(start = flower_doy - 3,
-                    end = full_bloom_doy,
-                    range(0, 151),
-                    enter_length = 6,
-                    exit_length = 6) +
-  enter_grow() +
-  exit_drift(y_mod = -1) +
-  exit_shrink() +
-  ###################################################################
+  transition_events(start = flower_doy - 3, ###
+                    end = full_bloom_doy,   ###
+                    range(0, 151),          ###
+                    enter_length = 6,       ###
+                    exit_length = 6) +      ###
+  enter_grow() +                            ###
+  exit_drift(y_mod = -1) +                  ###
+  exit_shrink() +                           ###
   labs(caption = "{paste(month(ymd(\"2019-01-01\") + frame_time, label = TRUE, abbr = FALSE),
                   day(ymd(\"2019-01-01\") + frame_time))}") +
   theme(text = element_text(family = "Manga Temple", colour = "#3D1308"),
@@ -610,9 +573,7 @@ p <- ggplot() +
         panel.background = element_blank(),
         plot.background = element_rect(fill = "#FFF9F3", colour = NA))
 
-#####################################################################
-animate(p, nframes = 151 * 2, start_pause = 15, end_pause = 15)
-#####################################################################
+animate(p, nframes = 151 * 2, start_pause = 15, end_pause = 15) ###
 ```
 
 
@@ -649,24 +610,20 @@ p <- ggplot() +
   enter_grow() +
   exit_drift(y_mod = -1) +
   exit_shrink() +
-  ###################################################################
-  labs(title = "When do cherry blossoms bloom in Japan?",
-       subtitle = paste("Hanami (\"flower viewing\") is a Japanese tradition over 1,000 years old, usually associated with",
-                     "cherry blossom trees. The sakura zensen (cherry blossom front) shows the typical date of",
-                     "flowering and full bloom across Japan.",
-                     "\n"),
-       sep = "\n",
+  labs(title = "When do cherry blossoms bloom in Japan?",                                                                    ###
+       subtitle = paste("Hanami (\"flower viewing\") is a Japanese tradition over 1,000 years old, usually associated with", ###
+                     "cherry blossom trees. The sakura zensen (cherry blossom front) shows the typical date of",             ###
+                     "flowering and full bloom across Japan.",                                                               ###
+                     "\n"),                                                                                                  ###
+       sep = "\n",                                                                                                           ###
        caption = "{paste(month(ymd(\"2019-01-01\") + frame_time, label = TRUE, abbr = FALSE),
                   day(ymd(\"2019-01-01\") + frame_time))}") +
-  ###################################################################
   theme(panel.border = element_blank(),
         panel.background = element_blank(),
         plot.background = element_rect(fill = "#FFF9F3", colour = NA),
-        ###################################################
-        plot.title = element_textbox_simple(family = "Manga Temple", colour = "#3D1308"),
-        plot.subtitle = element_textbox_simple(family = "Manga Temple", colour = "#3D1308"),
-        plot.caption = element_text(family = "Manga Temple", colour = "#3D1308"))
-        ###################################################
+        plot.title = element_textbox_simple(family = "Manga Temple", colour = "#3D1308"),    ###
+        plot.subtitle = element_textbox_simple(family = "Manga Temple", colour = "#3D1308"), ###
+        plot.caption = element_text(family = "Manga Temple", colour = "#3D1308"))            ###
 
 animate(p, nframes = 151 * 2, start_pause = 15, end_pause = 15, height = 715, width = 500)
 ```
@@ -716,12 +673,10 @@ p <- ggplot() +
   theme(panel.border = element_blank(),
         panel.background = element_blank(),
         plot.background = element_rect(fill = "#FFF9F3", colour = NA),
-        #######################################################################
-        plot.margin = margin(10, 50, 10, 50),
+        plot.margin = margin(10, 50, 10, 50),                                                              ###
         plot.title = element_textbox_simple(family = "Manga Temple", colour = "#3D1308",
-                                            halign = 0.5, margin = margin(10, 10, 10, 10)),
-        plot.subtitle = element_textbox_simple(family = "Manga Temple", colour = "#3D1308", halign = 0.5),
-        #######################################################################
+                                            halign = 0.5, margin = margin(10, 10, 10, 10)),                ###
+        plot.subtitle = element_textbox_simple(family = "Manga Temple", colour = "#3D1308", halign = 0.5), ###
         plot.caption = element_text(family = "Manga Temple", colour = "#3D1308"))
 
 animate(p, nframes = 151 * 2, start_pause = 15, end_pause = 15, height = 715, width = 500)
