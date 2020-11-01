@@ -33,4 +33,49 @@ personalities %>%
 ```
 
 
+### Use `tidymodels` to implement Principal Component Analysis (PCA)
+
+Resources for PCA:
+
+- `tidymodels` documentation: https://recipes.tidymodels.org/reference/step_pca.html
+- Julia Silge's walkthrough: https://juliasilge.com/blog/best-hip-hop/
+
+```{r calculate-pca}
+library(tidymodels)
+
+personalities_df <- personalities %>%
+  filter(!is_emoji) %>%
+  unite("spectrum_name", spectrum_low, spectrum_high, spectrum) %>%
+  select(-ratings:-is_emoji) %>%
+  pivot_wider(names_from = "spectrum_name", values_from = "mean")
+
+pca_trans <- recipe(~ ., data = personalities_df) %>%
+  step_center(all_numeric()) %>%
+  step_scale(all_numeric()) %>%
+  step_pca(all_numeric(), num_comp = 3)
+
+pca_estimates <- prep(pca_trans, training = personalities_df)
+
+pca_data <- bake(pca_estimates, personalities_df)
+```
+
+```{r}
+library(tidytext)
+
+tidy(pca_estimates, number = 3) %>%
+  filter(component %in% paste0("PC", 1:9)) %>%
+  group_by(component) %>%
+  top_n(12, abs(value)) %>%
+  ungroup() %>%
+  mutate(terms = reorder_within(terms, by = value, within = component, sep = "_")) %>%
+  ggplot(aes(value, terms)) +
+  geom_col() +
+  scale_y_reordered() +
+  facet_wrap(~ component, scales = "free_y")
+```
+
+
+
+
+
 
