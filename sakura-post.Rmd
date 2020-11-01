@@ -668,7 +668,7 @@ p <- ggplot() +
             hjust = -0.2,
             vjust = 1) +
   geom_image(data = sakura_overall,
-             aes(longitude, latitude, image = "sakura-no-border.svg"),
+             aes(longitude, latitude, image = "/img/sakura-no-border.svg"),
              size = 0.028) +
   coord_map(projection = "mercator") +
   theme_map() +
@@ -688,14 +688,12 @@ p <- ggplot() +
        sep = "\n",
        caption = "{paste(month(ymd(\"2019-01-01\") + frame_time, label = TRUE, abbr = FALSE),
                   day(ymd(\"2019-01-01\") + frame_time))}") +
-  theme(panel.border = element_blank(),
+  theme(text = element_text(family = "Manga Temple", colour = "#3D1308"),
         panel.background = element_blank(),
         plot.background = element_rect(fill = "#FFF9F3", colour = NA),
-        plot.margin = margin(10, 50, 10, 50),                                                              ###
-        plot.title = element_textbox_simple(family = "Manga Temple", colour = "#3D1308",
-                                            halign = 0.5, margin = margin(10, 10, 10, 10)),                ###
-        plot.subtitle = element_textbox_simple(family = "Manga Temple", colour = "#3D1308", halign = 0.5), ###
-        plot.caption = element_text(family = "Manga Temple", colour = "#3D1308"))
+        plot.margin = margin(10, 50, 10, 50),                                     ###
+        plot.title = element_text(halign = 0.5, margin = margin(10, 10, 10, 10)), ###
+        plot.subtitle = element_text(halign = 0.5))                               ###
 
 animate(p, nframes = 152 * 2, start_pause = 15, end_pause = 15, height = 715, width = 600)
 ```
@@ -744,14 +742,14 @@ p <- ggplot() +
        sep = "\n",
        caption = "{paste(month(ymd(\"2019-01-01\") + frame_time, label = TRUE, abbr = FALSE),
                   day(ymd(\"2019-01-01\") + frame_time))}") +
-  theme(panel.border = element_blank(),
+  theme(text = element_text(family = "Manga Temple", colour = "#3D1308"),
+        panel.border = element_blank(),
         panel.background = element_blank(),
         plot.background = element_rect(fill = "#FFF9F3", colour = NA),
         plot.margin = margin(10, 50, 10, 50),
-        plot.title = element_textbox_simple(size = 11, family = "Manga Temple", colour = "#3D1308",
-                                            halign = 0.5, margin = margin(10, 10, 10, 10)),
-        plot.subtitle = element_textbox_simple(size = 8, family = "Manga Temple", colour = "#3D1308", halign = 0.5),
-        plot.caption = element_text(size = 14, family = "Manga Temple", colour = "#3D1308"))
+        plot.title = element_textbox_simple(size = 11, halign = 0.5, margin = margin(10, 10, 10, 10)),
+        plot.subtitle = element_textbox_simple(size = 8, halign = 0.5),
+        plot.caption = element_text(size = 14))
 
 animate(p, nframes = 152 * 2, start_pause = 15, end_pause = 15, height = 715, width = 600)
 ```
