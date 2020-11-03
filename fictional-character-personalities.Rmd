@@ -45,14 +45,15 @@ library(tidymodels)
 
 personalities_df <- personalities %>%
   filter(!is_emoji) %>%
-  unite("spectrum_name", spectrum_low, spectrum_high, spectrum) %>%
-  select(-ratings:-is_emoji) %>%
-  pivot_wider(names_from = "spectrum_name", values_from = "mean")
+  group_by(character_code, fictional_work, character_name, spectrum_high) %>%
+  summarise(mean = mean(mean)) %>%
+  ungroup() %>%
+  pivot_wider(names_from = "spectrum_high", values_from = "mean")
 
 pca_trans <- recipe(~ ., data = personalities_df) %>%
   step_center(all_numeric()) %>%
   step_scale(all_numeric()) %>%
-  step_pca(all_numeric(), num_comp = 3)
+  step_pca(all_numeric(), num_comp = 6)
 
 pca_estimates <- prep(pca_trans, training = personalities_df)
 
@@ -73,6 +74,71 @@ tidy(pca_estimates, number = 3) %>%
   scale_y_reordered() +
   facet_wrap(~ component, scales = "free_y")
 ```
+
+```{r}
+tidy(pca_estimates, number = 3) %>%
+  filter(component %in% paste0("PC", 1:6)) %>%
+  group_by(component) %>%
+  top_n(12, abs(value)) %>%
+  ungroup() %>%
+  mutate(terms = reorder_within(terms, value, component, sep = "_")) %>%
+  ggplot(aes(value, terms, fill = as.factor(sign(value)))) +
+  geom_col() +
+  facet_wrap(~ component, scales= "free_y")
+```
+
+```{r}
+interesting_works <- c("Arrested Development", "Anna Karenina", "Brooklyn Nine-Nine", "Star Trek: Deep Space Nine", "Friends",
+                       "Game of Thrones", "The Good Place", "Harry Potter", "The Lion King", "Mad Men", "Parks and Recreation",
+                       "Seinfeld", "Silicon Valley", "Star Wars", "Star Trek: The Next Generation")
+
+juice(pca_estimates) %>%
+  filter(fictional_work %in% sample(interesting_works, 4)) %>%
+  rename(`Chaotic -> Sensible` = PC1,
+         `Hard -> Soft` = PC2) %>%
+  ggplot(aes(`Chaotic -> Sensible`, `Hard -> Soft`)) +
+  geom_text(aes(label = paste0(character_name, "\n(", fictional_work, ")")),
+            size = 3, check_overlap = TRUE) +
+  theme_light()
+```
+
+```{r}
+tidy(pca_estimates, number = 3, type = "variance") %>%
+  filter(terms == "percent variance") %>%
+  transmute(component,
+            pct_variance_explained = value / 100) %>%
+  filter(pct_variance_explained > 0.005) %>%
+  ggplot() +
+  geom_col(aes(component, pct_variance_explained)) +
+  scale_y_continuous(labels = label_percent())
+```
+
+```{r}
+clustering_data <- juice(pca_estimates) %>%
+  select(PC1:PC6)
+
+tibble(k = 1:20) %>%
+  mutate(model = map(k, ~ kmeans(clustering_data, .x)),
+         glanced_model = map(model, glance)) %>%
+  unnest(cols = c(glanced_model)) %>%
+  ggplot(aes(k, tot.withinss)) +
+  geom_point() +
+  geom_line()
+
+kmeans(clustering_data, centers = 11) %>%
+  augment(clustering_data) %>%
+  bind_cols(juice(pca_estimates) %>% select(character_code, fictional_work, character_name)) %>%
+  rename(cluster = .cluster) %>%
+  select(character_code:character_name,
+         cluster,
+         PC1:PC6) %>%
+  #filter(fictional_work %in% interesting_works) %>%
+  View()
+```
+
+
+
+
 
 
 
