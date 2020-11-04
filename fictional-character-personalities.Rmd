@@ -21,6 +21,21 @@ personalities %>%
   pivot_wider(names_from = spectrum_name, values_from = mean, values_fill = NA)
 ```
 
+```{r helper-datasets}
+character_list <- personalities %>%
+  distinct(character_code, fictional_work, character_name)
+
+spectrum_list <- personalities %>%
+  distinct(spectrum, spectrum_low, spectrum_high)
+
+interesting_works <- c("Arrested Development", "Anna Karenina", "Brooklyn Nine-Nine", "Star Trek: Deep Space Nine", "Friends",
+                       "Game of Thrones", "The Good Place", "Harry Potter", "The Lion King", "Mad Men", "Parks and Recreation",
+                       "Seinfeld", "Silicon Valley", "Star Wars", "Star Trek: The Next Generation")
+```
+
+
+
+### Worf's character evolution
 
 Is Worf rated differently between TNG and DS9?
 
@@ -46,76 +61,71 @@ Resources for PCA:
 - `tidymodels` documentation: https://recipes.tidymodels.org/reference/step_pca.html
 - Julia Silge's walkthrough: https://juliasilge.com/blog/best-hip-hop/
 
-```{r calculate-pca}
-personalities_df <- personalities %>%
+```{r data-for-pca}
+pca_data <- personalities %>%
   filter(!is_emoji) %>%
-  group_by(character_code, fictional_work, character_name, spectrum_high) %>%
-  summarise(mean = mean(mean)) %>%
-  ungroup() %>%
-  pivot_wider(names_from = "spectrum_high", values_from = "mean")
-
-pca_trans <- recipe(~ ., data = personalities_df) %>%
-  step_center(all_numeric()) %>%
-  step_scale(all_numeric()) %>%
-  step_pca(all_numeric(), num_comp = 6)
-
-pca_estimates <- prep(pca_trans, training = personalities_df)
-
-pca_data <- bake(pca_estimates, personalities_df)
+  select(character_code, spectrum, mean) %>%
+  pivot_wider(names_from = spectrum, values_from = mean)
 ```
 
-```{r}
-tidy(pca_estimates, number = 3) %>%
+```{r initial-pca}
+# Write recipe for PCA
+pca_recipe <- recipe(~ ., data = pca_data) %>%
+  update_role(character_code, new_role = "id") %>%
+  step_normalize(all_predictors()) %>%
+  step_pca(all_predictors())
+
+# Inspect a few principal components to see what they capture
+prep(pca_recipe) %>%
+  tidy(type = "coef", number = 2) %>%
+  left_join(spectrum_list, by = c("terms" = "spectrum")) %>%
+  mutate(label = ifelse(value > 0, spectrum_high, spectrum_low),
+         abs_value = abs(value)) %>%
   filter(component %in% paste0("PC", 1:9)) %>%
   group_by(component) %>%
-  top_n(12, abs(value)) %>%
+  top_n(12, abs_value) %>%
   ungroup() %>%
-  mutate(terms = reorder_within(terms, by = value, within = component, sep = "_")) %>%
-  ggplot(aes(value, terms)) +
+  mutate(label = reorder_within(label, by = abs_value, within = component, sep = "_")) %>%
+  ggplot(aes(abs_value, label)) +
   geom_col() +
-  scale_y_reordered() +
   facet_wrap(~ component, scales = "free_y")
-```
 
-```{r}
-tidy(pca_estimates, number = 3) %>%
-  filter(component %in% paste0("PC", 1:6)) %>%
-  group_by(component) %>%
-  top_n(12, abs(value)) %>%
-  ungroup() %>%
-  mutate(terms = reorder_within(terms, value, component, sep = "_")) %>%
-  ggplot(aes(value, terms, fill = as.factor(sign(value)))) +
-  geom_col() +
-  facet_wrap(~ component, scales= "free_y")
-```
-
-```{r}
-interesting_works <- c("Arrested Development", "Anna Karenina", "Brooklyn Nine-Nine", "Star Trek: Deep Space Nine", "Friends",
-                       "Game of Thrones", "The Good Place", "Harry Potter", "The Lion King", "Mad Men", "Parks and Recreation",
-                       "Seinfeld", "Silicon Valley", "Star Wars", "Star Trek: The Next Generation")
-
-juice(pca_estimates) %>%
-  filter(fictional_work %in% sample(interesting_works, 4)) %>%
-  rename(`Chaotic -> Sensible` = PC1,
-         `Hard -> Soft` = PC2) %>%
-  ggplot(aes(`Chaotic -> Sensible`, `Hard -> Soft`)) +
-  geom_text(aes(label = paste0(character_name, "\n(", fictional_work, ")")),
-            size = 3, check_overlap = TRUE) +
-  theme_light()
-```
-
-```{r}
-tidy(pca_estimates, number = 3, type = "variance") %>%
-  filter(terms == "percent variance") %>%
-  transmute(component,
-            pct_variance_explained = value / 100) %>%
-  filter(pct_variance_explained > 0.005) %>%
-  ggplot() +
-  geom_col(aes(component, pct_variance_explained)) +
+# Inspect PCA to see which principal components account for what % of variance
+prep(pca_recipe) %>%
+  tidy(type = "variance", number = 2) %>%
+  filter(terms == "cumulative percent variance") %>%
+  mutate(pct_variance = value / 100) %>%
+  ggplot(aes(component, pct_variance)) +
+  geom_line() +
   scale_y_continuous(labels = label_percent())
 ```
 
+```{r second-pca}
+# Add threshold to PCA to cover 90% of variance
+pca_recipe <- recipe(~ ., data = pca_data) %>%
+  update_role(character_code, new_role = "id") %>%
+  step_normalize(all_predictors()) %>%
+  step_pca(all_predictors(),
+           threshold = 0.9)
+
+# Run PCA
+personality_pca <- prep(pca_recipe) %>%
+  juice()
+```
+
 ```{r}
+character_list %>%
+  left_join(personality_pca, by = "character_code") %>%
+  ggplot(aes(PC01, PC02)) +
+  geom_text(aes(label = character_name), check_overlap = TRUE)
+```
+
+
+### STILL NEEDS WORK
+
+Clustering rough code
+
+```{r clustering}
 clustering_data <- juice(pca_estimates) %>%
   select(PC1:PC6)
 
