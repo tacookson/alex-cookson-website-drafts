@@ -7,6 +7,8 @@ output: html_document
 
 ```{r setup, message = FALSE, warning = FALSE}
 library(tidyverse)
+library(tidymodels)
+library(tidytext)
 
 # Change this to GitHub link before publishing
 personalities <- read_tsv("~/data/fictional-character-personalities/personalities.txt")
@@ -19,18 +21,22 @@ personalities %>%
   pivot_wider(names_from = spectrum_name, values_from = mean, values_fill = NA)
 ```
 
-```{r random-spectrum-top-characters}
+
+Is Worf rated differently between TNG and DS9?
+
+```{r worf-difference}
 personalities %>%
-  filter(spectrum == sample(unique(spectrum), 1)) %>%
-  top_n(16, wt = mean) %>%
-  mutate(fictional_work = fct_reorder(paste(character_name, fictional_work, sep = " | "), mean),
-         label = paste(spectrum_low, spectrum_high, sep = " / ")) %>%
-  ggplot(aes(mean, fictional_work)) +
-  geom_point(size = 3) +
-  geom_text(aes(label = label),
-            hjust = 1,
-            nudge_x = -1)
+  filter(character_name == "Worf",
+         !is_emoji) %>%
+  select(-character_code, -ratings, -sd, -is_emoji) %>%
+  pivot_wider(names_from = fictional_work, values_from = mean) %>%
+  rename(ds9 = `Star Trek: Deep Space Nine`,
+         tng = `Star Trek: The Next Generation`) %>%
+  mutate(change = ds9 - tng) %>%
+  top_n(20, abs(change)) %>%
+  arrange(desc(change))
 ```
+
 
 
 ### Use `tidymodels` to implement Principal Component Analysis (PCA)
@@ -41,8 +47,6 @@ Resources for PCA:
 - Julia Silge's walkthrough: https://juliasilge.com/blog/best-hip-hop/
 
 ```{r calculate-pca}
-library(tidymodels)
-
 personalities_df <- personalities %>%
   filter(!is_emoji) %>%
   group_by(character_code, fictional_work, character_name, spectrum_high) %>%
@@ -61,8 +65,6 @@ pca_data <- bake(pca_estimates, personalities_df)
 ```
 
 ```{r}
-library(tidytext)
-
 tidy(pca_estimates, number = 3) %>%
   filter(component %in% paste0("PC", 1:9)) %>%
   group_by(component) %>%
