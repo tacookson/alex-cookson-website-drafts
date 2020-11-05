@@ -10,11 +10,58 @@ library(tidyverse)
 library(tidymodels)
 library(tidytext)
 
-# Change this to GitHub link before publishing
+theme_set(theme_light())
+
 personalities <- read_tsv("~/data/fictional-character-personalities/personalities.txt")
 ```
 
-```{r eda}
+```{r pride-and-prejudice-example}
+personalities %>%
+  filter(!is_emoji,
+         fictional_work == "Pride and Prejudice",
+         character_name %in% c("Elizabeth Bennet", "Jane Bennet", "Lydia Bennet",
+                               "Mr. Darcy", "Mr. William Collins", "George Wickham")) %>%
+  mutate(mean = mean - 50) %>%
+  group_by(character_name) %>%
+  top_n(8, abs(mean)) %>%
+  ungroup() %>%
+  mutate(spectrum_label = ifelse(mean > 0, spectrum_high, spectrum_low),
+         mean = abs(mean),
+         spectrum_label = reorder_within(spectrum_label, mean, character_name)) %>%
+  ggplot() +
+  geom_col(aes(mean, spectrum_label, fill = character_name), show.legend = FALSE) +
+  scale_y_reordered() +
+  facet_wrap(~ character_name, scales = "free_y") +
+  labs(title = "",
+       x = "Score (out of 50)",
+       y = "Personality Trait")
+```
+
+```{r star-trek-tng-example}
+personalities %>%
+  filter(!is_emoji,
+         fictional_work == "Star Trek: The Next Generation",
+         character_name %in% c("Jean-Luc Picard", "William Riker", "Geordi La Forge",
+                               "Worf", "Beverly Crusher", "Data")) %>%
+  mutate(mean = mean - 50) %>%
+  group_by(character_name) %>%
+  top_n(8, abs(mean)) %>%
+  ungroup() %>%
+  mutate(spectrum_label = ifelse(mean > 0, spectrum_high, spectrum_low),
+         mean = abs(mean),
+         spectrum_label = reorder_within(spectrum_label, mean, character_name)) %>%
+  ggplot() +
+  geom_col(aes(mean, spectrum_label, fill = character_name), show.legend = FALSE) +
+  scale_y_reordered() +
+  facet_wrap(~ character_name, scales = "free_y") +
+  labs(title = "",
+       x = "Score (out of 50)",
+       y = "Personality Trait")
+```
+
+
+
+```{r wide-personalities}
 personalities %>%
   mutate(spectrum_name = paste(spectrum_low, spectrum_high, sep = "_")) %>%
   select(character_code, spectrum_name, mean) %>%
@@ -30,7 +77,7 @@ spectrum_list <- personalities %>%
 
 interesting_works <- c("Arrested Development", "Anna Karenina", "Brooklyn Nine-Nine", "Star Trek: Deep Space Nine", "Friends",
                        "Game of Thrones", "The Good Place", "Harry Potter", "The Lion King", "Mad Men", "Parks and Recreation",
-                       "Seinfeld", "Silicon Valley", "Star Wars", "Star Trek: The Next Generation")
+                       "Seinfeld", "Silicon Valley", "Star Wars", "Star Trek: The Next Generation", "Pride and Prejudice")
 ```
 
 
@@ -81,14 +128,14 @@ prep(pca_recipe) %>%
   left_join(spectrum_list, by = c("terms" = "spectrum")) %>%
   mutate(label = ifelse(value > 0, spectrum_high, spectrum_low),
          abs_value = abs(value)) %>%
-  filter(component %in% paste0("PC", 1:9)) %>%
+  filter(component %in% paste0("PC", 1:6)) %>%
   group_by(component) %>%
   top_n(12, abs_value) %>%
   ungroup() %>%
   mutate(label = reorder_within(label, by = abs_value, within = component, sep = "_")) %>%
   ggplot(aes(abs_value, label)) +
   geom_col() +
-  facet_wrap(~ component, scales = "free_y")
+  facet_wrap(~ component, scales = "free_y", ncol = 2)
 
 # Inspect PCA to see which principal components account for what % of variance
 prep(pca_recipe) %>%
@@ -116,7 +163,8 @@ personality_pca <- prep(pca_recipe) %>%
 ```{r}
 character_list %>%
   left_join(personality_pca, by = "character_code") %>%
-  ggplot(aes(PC01, PC02)) +
+  filter(fictional_work %in% interesting_works) %>%
+  ggplot(aes(PC01, PC06)) +
   geom_text(aes(label = character_name), check_overlap = TRUE)
 ```
 
@@ -126,8 +174,8 @@ character_list %>%
 Clustering rough code
 
 ```{r clustering}
-clustering_data <- juice(pca_estimates) %>%
-  select(PC1:PC6)
+clustering_data <- personality_pca %>%
+  select(-character_code)
 
 tibble(k = 1:20) %>%
   mutate(model = map(k, ~ kmeans(clustering_data, .x)),
@@ -137,19 +185,40 @@ tibble(k = 1:20) %>%
   geom_point() +
   geom_line()
 
-kmeans(clustering_data, centers = 11) %>%
+cluster_model <- kmeans(clustering_data, centers = 12) %>%
   augment(clustering_data) %>%
-  bind_cols(juice(pca_estimates) %>% select(character_code, fictional_work, character_name)) %>%
+  bind_cols(character_list) %>%
   rename(cluster = .cluster) %>%
-  select(character_code:character_name,
-         cluster,
-         PC1:PC6) %>%
-  #filter(fictional_work %in% interesting_works) %>%
-  View()
+  select(character_code, fictional_work, character_name, cluster, everything()) %>%
+  filter(fictional_work %in% interesting_works)
+
+cluster_model %>%
+  select(cluster, PC01:PC26) %>%
+  group_by(cluster) %>%
+  summarise_all(mean) %>%
+  pivot_longer(PC01:PC26) %>%
+  #mutate(cluster = reorder_within(cluster, by = value, within = name, sep = "_")) %>%
+  ggplot(aes(value, cluster)) +
+  geom_col() +
+  facet_wrap(~ name, scales = "free_x")
+
+
+cluster_model %>%
+  ggplot(aes(PC01, PC02, colour = cluster)) +
+  geom_text(aes(label = paste0(character_name, "\n(", fictional_work, ")")), check_overlap = TRUE, size = 3)
 ```
 
 
 
+### APPENDIX
+
+```{r sample-random-character}
+personalities %>%
+  filter(character_name %in% sample(unique(character_name), 1),
+         !is_emoji) %>%
+  top_n(12, abs(mean - 50)) %>%
+  arrange(desc(mean))
+```
 
 
 
