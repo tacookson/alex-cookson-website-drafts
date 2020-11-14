@@ -14,14 +14,16 @@ output: html_document
 ### The Data
 
 ```{r setup, message = FALSE, warning = FALSE}
-library(tidyverse)
-library(tidymodels)
-library(tidytext)
+library(tidyverse) # For data manipulation
+library(tidymodels) # For PCA
+library(tidytext) # For reorder_within()
 
+# These are to make tables look nice on the website
+# You probably won't need them
 library(knitr)
 library(kableExtra)
 
-theme_set(theme_light())
+theme_set(theme_void())
 
 personalities <- read_tsv("~/data/fictional-character-personalities/personalities.txt")
 ```
@@ -43,6 +45,12 @@ Captain Picard is **refined** and **charming**, as well as **bold** and **tastef
 
 ### Examples from Pride and Prejudice and The Lion King
 
+```{r colour-palette}
+custom_palette <- c("#19313b", "#3b636b", "#bbb6a2",
+                    "#ffc277", "#bc652f", "#472411")
+```
+
+
 ```{r pride-and-prejudice-example}
 personalities %>%
   filter(!is_emoji,
@@ -58,11 +66,18 @@ personalities %>%
          spectrum_label = reorder_within(spectrum_label, mean, character_name)) %>%
   ggplot() +
   geom_col(aes(mean, spectrum_label, fill = character_name), show.legend = FALSE) +
+  geom_vline(xintercept = seq(0, 50, by = 10), colour = "white", size = 0.1) +
   scale_y_reordered() +
+  scale_fill_manual(values = custom_palette) +
+  expand_limits(x = c(0, 50)) +
   facet_wrap(~ character_name, scales = "free_y") +
   labs(title = "Pride and Prejudice",
        x = "Score (out of 50)",
-       y = "Personality Trait")
+       y = "Personality Trait") +
+  theme(plot.title = element_text(size = 20, hjust = 0.5, margin = margin(t = 10, b = 20)),
+        axis.text.x = element_text(size = 12, hjust = 0.5),
+        axis.text.y = element_text(size = 12, hjust = 1),
+        strip.text = element_text(size = 14, face = "bold", margin = margin(b = 5)))
 ```
 
 ```{r lion-king-example}
