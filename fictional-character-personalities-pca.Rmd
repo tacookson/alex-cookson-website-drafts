@@ -3,21 +3,26 @@ title: "fictional-character-personalities"
 author: "Alex Cookson"
 date: "11/11/2020"
 output: html_document
----
+---  
+\  
 
-### Introduction
+Why PCA?
 
 - PCA, dimensionality reduction
 - Overview of data
 
+I often walk through code in posts, but I won't be doing that here. Instead, I'll focus more on the analysis itself.
 
-### The Data
+
+## Setup
 
 ```{r setup, message = FALSE, warning = FALSE}
 library(tidyverse) # For data manipulation
 library(tidymodels) # For PCA
 library(tidytext) # For reorder_within()
 library(extrafont) # For custom fonts on graphs
+library(glue) # For creating strings from multiple pieces
+library(ggtext) # For fine-grained text formatting
 
 # These are to make tables look nice on the website
 # You probably won't need them
@@ -28,13 +33,15 @@ theme_set(theme_void())
 
 personalities_raw <- read_tsv("~/data/fictional-character-personalities/personalities.txt")
 
-genders <- read_csv("https://raw.githubusercontent.com/tacookson/data/master/fictional-character-personalities/ref/character-gender.csv")
+genders <- read_csv("~/data/fictional-character-personalities/ref/character-gender.csv")
 
 personalities <- personalities_raw %>%
   left_join(genders)
-```
+```  
+\  
 
-### Data Inspection
+
+## Data inspection
 
 Let's look at an example character: Captain Jean-Luc Picard from *Star Trek: The Next Generation*.
 
@@ -54,16 +61,15 @@ The main fields we're interested in are `spectrum_low`, `spectrum_high`, and `me
 
 If we look at some of Captain Picard's strongest traits -- that is, close to -50 or +50 -- we see that he is **charming** and **intellectual** (low scores corresponding to `spectrum_low`), as well as **bold** and **tasteful** (high scores corresponding to `spectrum_high`). That rings true to me. I would certainly use those words to describe our dear Captain.
 
-Most of the other fields are to identify who the character is and what fictional world they come from. We also have the number of ratings (`ratings`) and standard deviation (`sd`) for that character-spectrum combination. And finally, we have a helper column, `is_emoji` that tells us if the traits on each end of the spectrum are emojis instead of words.  
+Most of the other fields are to identify who the character is and what fictional world they come from. We also have the number of ratings (`ratings`) and standard deviation (`sd`) for that character-spectrum combination. And finally, we have a helper column, `is_emoji` that tells us if the traits on each end of the spectrum are emojis instead of words.
+
+Juuuust to make sure this data checks out -- and because I'm really curious -- let's look at some more examples from *Pride and Prejudice* and *The Lion King*. We'll look each character's eight strongest traits. I've included the trait on the opposite end of the spectrum in parentheses for reference.  
 \  
 
-Juuuust to make sure this data checks out -- and because I'm really curious -- let's look at some more examples from *Pride and Prejudice* and *The Lion King*. We'll look each character's eight strongest traits.  
-\  
 
+### *Pride and Prejudice*
 
-#### *Pride and Prejudice*
-
-```{r pride-and-prejudice-example, fig.align = 'center', fig.width = 12, fig.height = 6.75}
+```{r pride-and-prejudice-example, fig.align = 'center', fig.width = 12, fig.height = 9.75}
 pride_palette <- c("#19313b", "#3b636b", "#bbb6a2",
                     "#ffc277", "#bc652f", "#472411")
 
@@ -75,7 +81,9 @@ pride_example <- personalities %>%
   group_by(character_name) %>%
   top_n(8, abs(mean)) %>%
   ungroup() %>%
-  mutate(spectrum_label = ifelse(mean > 0, spectrum_high, spectrum_low),
+  mutate(spectrum_label = ifelse(mean > 0,
+                                 glue("{spectrum_high}<br><span style='font-size:10pt'>({spectrum_low})</span>"),
+                                 glue("{spectrum_low}<br><span style='font-size:10pt'>({spectrum_high})</span>")),
          mean = abs(mean),
          spectrum_label = reorder_within(spectrum_label, mean, character_name))
 
@@ -88,27 +96,27 @@ pride_example %>%
   expand_limits(x = c(0, 50)) +
   facet_wrap(~ character_name, scales = "free_y") +
   labs(title = "Pride and Prejudice",
-       x = "Score (out of 50)",
-       y = "Personality Trait") +
+       caption = "Visualization: @alexcookson | Data: Open Source Psychometrics Project") +
   theme(plot.title = element_text(family = "JaneAusten", face = "bold", size = 32,
                                   hjust = 0.5, margin = margin(t = 10, b = 20)),
-        plot.background = element_rect(fill = "#FFF1E6"),
+        plot.background = element_rect(fill = "#FFF1E6", colour = NA),
         plot.margin = margin(10, 10, 10, 10),
+        plot.caption = element_text(family = "Sylfaen", size = 8, colour = "grey50", margin = margin(t = 10)),
         strip.text = element_text(family = "JaneAusten", size = 18, margin = margin(b = 10)),
         axis.text.x = element_text(family = "Sylfaen", size = 14, hjust = 0.5),
-        axis.text.y = element_text(family = "Sylfaen", size = 14, hjust = 1))
+        axis.text.y = element_markdown(family = "Sylfaen", size = 14, hjust = 1))
 ```  
 \  
 
-Some of the traits are harder to interpret, like Elizabeth Bennet's top trait, "treasure". These make more sense when you see its twin on the other end of the spectrum. (In this case, it's "treasure" on one end and "trash" on the other.)
+Some traits are pretty flippant, like Elizabeth Bennet's top trait, "treasure", which has "trash" at the other end of the spectrum. Keep in mind that this data is from an online quiz, not a rigorous scientific study -- it's just a bit of fun!
 
 The traits for the rest of the characters are spot-on: **selfish** George Wickham, **kind** Jane, **foolish** Lydia, **rich** and **reserved** Mr. Darcy, and **awkward** Mr. Collins.  
 \  
 
 
-#### *The Lion King*
+### *The Lion King*
 
-```{r lion-king-example, fig.align = 'center', fig.width = 12, fig.height = 6.75}
+```{r lion-king-example, fig.align = 'center', fig.width = 12, fig.height = 9.75}
 lion_king_palette <- c("#FFBA08", "#FCA311", "#E85D04",
                        "#DC2F02", "#791901", "#38160D")
 
@@ -118,7 +126,9 @@ lion_king_example <- personalities %>%
   group_by(character_name) %>%
   top_n(8, abs(mean)) %>%
   ungroup() %>%
-  mutate(spectrum_label = ifelse(mean > 0, spectrum_high, spectrum_low),
+  mutate(spectrum_label = ifelse(mean > 0,
+                                 glue("{spectrum_high}<br><span style='font-size:10pt'>({spectrum_low})</span>"),
+                                 glue("{spectrum_low}<br><span style='font-size:10pt'>({spectrum_high})</span>")),
          mean = abs(mean),
          spectrum_label = reorder_within(spectrum_label, mean, character_name))
 
@@ -131,22 +141,30 @@ lion_king_example %>%
   expand_limits(x = c(0, 50)) +
   facet_wrap(~ character_name, scales = "free_y") +
   labs(title = "The Lion King",
-       x = "Score (out of 50)",
-       y = "Personality Trait") +
+       caption = "Visualization: @alexcookson | Data: Open Source Psychometrics Project") +
   theme(plot.title = element_text(family = "African", size = 32, hjust = 0.5, margin = margin(t = 10, b = 20)),
-        plot.background = element_rect(fill = "#FFFBEB"),
+        plot.background = element_rect(fill = "#FFFBEB", colour = NA),
         plot.margin = margin(10, 10, 10, 10),
+        plot.caption = element_text(family = "IBM Plex Sans", size = 8, colour = "grey50", margin = margin(t = 10)),
         strip.text = element_text(family = "African", size = 18, margin = margin(b = 10)),
         axis.text.x = element_text(family = "IBM Plex Sans", size = 14, hjust = 0.5),
-        axis.text.y = element_text(family = "IBM Plex Sans", size = 14, hjust = 1))
+        axis.text.y = element_markdown(family = "IBM Plex Sans", size = 14, hjust = 1))
 ```  
 \  
 
-Scar has lots of great traits for a villain (including the very on-the-nose **villainous**!). Timon is **thin** and Pumbaa is **thick**. Nala's top trait is **beautiful**, which I find a bit weird for an animated lion.  
+Scar has great traits for a villain (including the very on-the-nose **villainous**!). Timon is **thin** and Pumbaa is **thick**. And Nala's top trait is **beautiful**, which I find a bit weird for an animated lion. (In fact, it gives some hints at how characters of different genders are portrayed and perceived in media, something I plan to analyze more in a future post.)  
 \  
 
 
-### Helper Datasets
+## Principal Component Analysis (PCA)
+
+Now that we have a sense of the data, let's get into principal component analysis. There are some great resources out there already, like Julia Silge's [PCA walkthrough using hip hop songs](https://juliasilge.com/blog/best-hip-hop/) to see how it can be applied, [`tidymodels` documentation](https://recipes.tidymodels.org/reference/step_pca.html) to see how `tidymodels` approaches PCA, and StatQuest's [step-by-step guide to PCA] to understand some of the underlying mathematics.  
+\  
+
+
+### Helper datasets
+
+Before we get started, let's create create some helper datasets that will help us down the line. Why? We'll be conducting PCA with just code fields to identify characters and spectrums. Once the PCA is done, we'll want to inspect the results and it's not very informative to see character "HP/2" or spectrum "BAP209". Instead, we want to see "Harry Potter" or "city-slicker to country-bumpkin".
 
 ```{r helper-datasets}
 character_list <- personalities %>%
@@ -154,23 +172,17 @@ character_list <- personalities %>%
 
 spectrum_list <- personalities %>%
   distinct(spectrum, spectrum_low, spectrum_high)
-
-interesting_works <- c("Arrested Development", "Brooklyn Nine-Nine", "Star Trek: Deep Space Nine",
-                       "Friends", "Game of Thrones", "The Good Place", "Harry Potter",
-                       "The Lion King", "Mad Men", "Parks and Recreation", "Seinfeld",
-                       "Silicon Valley", "Star Wars", "Star Trek: The Next Generation",
-                       "Pride and Prejudice", "Community", "Schitt's Creek")
-```
+```  
+\  
 
 
-### Principal Component Analysis (PCA)
+### PCA with `tidymodels`
 
-We'll use `tidymodels` to conduct PCA.
+`tidymodels` makes PCA *very* straightforward -- in this case, it takes about 10 lines of code to set up the data properly and run the PCA.
 
-- `tidymodels` documentation: https://recipes.tidymodels.org/reference/step_pca.html
-- Julia Silge's walkthrough: https://juliasilge.com/blog/best-hip-hop/
+First, let's convert our data to a format that's closer to a matrix than a dataframe. We want each row to correspond to a character and each column to correspond to a spectrum. We'll also have a special column with `character_code` so that we know who's who once we're done!
 
-Convert data to a wide format, with rows for characters and columns for personality spectrums
+This is what the data we're feeding into `tidymodels` looks like:
 
 ```{r data-for-pca}
 pca_data <- personalities %>%
@@ -183,11 +195,13 @@ pca_data %>%
   select(1:5) %>%
   kable(format = "html") %>%
   kable_styling()
-```
+```  
+\  
+
+Second, we'll create a recipe that specifies `character_code` as the `id` column, normalizes the scores (this is *very* important in PCA), and runs the PCA itself.
 
 
-
-```{r initial-pca}
+```{r pca}
 # Write recipe for PCA
 pca_recipe <- recipe(~ ., data = pca_data) %>%
   # Specify character_code as key/id column
@@ -195,10 +209,56 @@ pca_recipe <- recipe(~ ., data = pca_data) %>%
   # Normalize sets mean to zero and standard deviation of one
   step_normalize(all_predictors()) %>%
   # PCA is done here
-  step_pca(all_predictors())
+  # Use threshold to specify we want to capture 90% of variance in the data
+  step_pca(all_predictors(),
+           threshold = 0.9)
+
+# prep() implements the recipe
+# bake() applies the PCA model to a dataset
+personality_pca <- prep(pca_recipe) %>%
+  bake(new_data = pca_data)
 ```
 
-```{r}
+That's it. The PCA is done. (Really!)  
+\  
+
+
+### What is a principal component?
+
+You can think of each principal component (PC) as bundling many spectrums that tell us similar information into a single variable. Consider Mr. Darcy's top traits:
+
+```{r mr-darcy-example, fig.align = 'center', fig.width = 12, fig.height = 7.75}
+pride_example %>%
+  filter(character_name == "Mr. Darcy") %>%
+  mutate(spectrum_label = str_replace(spectrum_label, "10pt", "14pt"),
+         spectrum_label = fct_reorder(spectrum_label, mean)) %>%
+  ggplot() +
+  geom_col(aes(mean, spectrum_label),
+           fill = "#bc652f", show.legend = FALSE) +
+  geom_vline(xintercept = seq(0, 50, by = 10), colour = "#FFF1E6", size = 0.1) +
+  expand_limits(x = c(0, 50)) +
+  scale_y_reordered() +
+  labs(title = "Mr. Darcy") +
+  theme(plot.title = element_text(family = "JaneAusten", face = "bold", size = 32, hjust = 0.5),
+        plot.background = element_rect(fill = "#FFF1E6", colour = NA),
+        plot.margin = margin(10, 10, 10, 10),
+        axis.text.x = element_text(family = "Sylfaen", size = 18, hjust = 0.5),
+        axis.text.y = element_markdown(family = "Sylfaen", size = 22, hjust = 1))
+```  
+\  
+
+He's reserved, private, guarded, reclusive, confidential, and an introvert. All of these are getting at the same thing. If we already know that Mr. Darcy is **reserved**, do we learn that much more about him if we also know he's **private**? Not really, right? These two traits tend to go together (if you're curious, their correlation is 0.909).
+
+Intuitively, *all* the reserved-type traits go together. So let's bundle them all together into a single, new variable. Why don't we call it, oh, I don't know, a ***principal component***? If we knew what Mr. Darcy's score was on this new principal component that bundles together reserved, private, etc., we'd still have a pretty good idea of what type of person he is, even though we wouldn't know his scores for each individual trait. *This is what PCA does*, except on a larger scale and with math instead of with intuition, as we just did with Mr. Darcy.  
+\  
+
+
+### What do the top principal components tell us?
+
+We can see the composition of each principal component, which tells us which traits have been bundled together. Here are the top six PCs:
+
+```{r top-components, fig.align = 'center', fig.width = 12, fig.height = 10.75}
+# Custom colour palette
 top_pc_palette <- c("#264653", "#2A9D8F", "#8AB17D",
                     "#E9C46A", "#F4A261", "#E76F51")
 
@@ -209,7 +269,9 @@ prep(pca_recipe) %>%
   # Add interpretable names of spectrums
   left_join(spectrum_list, by = c("terms" = "spectrum")) %>%
   # Take the end of the spectrum that the principal component value is closest to
-  mutate(label = ifelse(value > 0, spectrum_high, spectrum_low),
+  mutate(label = ifelse(value > 0,
+                        glue("{spectrum_high}<br><span style='font-size:10pt'>({spectrum_low})</span>"),
+                        glue("{spectrum_low}<br><span style='font-size:10pt'>({spectrum_high})</span>")),
          abs_value = abs(value)) %>%
   # Look at the first six components
   filter(component %in% paste0("PC", 1:6)) %>%
@@ -224,74 +286,158 @@ prep(pca_recipe) %>%
   ggplot() +
   geom_col(aes(abs_value, label, fill = component),
            show.legend = FALSE) +
-  geom_text(aes(x = 0, y = label, label = text_label),
-            hjust = 0, nudge_x = 0.005, family = "IBM Plex Sans",
-            colour = "white", size = 5, fontface = "bold") +
-  scale_x_continuous(breaks = seq(0, 0.2, by = 0.05)) +
+  geom_richtext(aes(x = 0, y = label, label = text_label),
+            hjust = 0, nudge_x = 0.002, family = "IBM Plex Sans",
+            colour = "white", size = 4.6, fontface = "bold",
+            fill = NA, label.colour = NA) +
+  scale_x_continuous(breaks = seq(0, 0.2, by = 0.05),
+                     expand = c(0, 0)) +
   scale_y_reordered() +
   scale_fill_manual(values = top_pc_palette) +
-  facet_wrap(~ component, scales = "free_y", ncol = 2) +
-  labs(title = "Top Principal Components") +
+  facet_wrap(~ component, scales = "free_y") +
+  labs(title = "What are the top principal components?",
+       subtitle = paste("Each component is shown with the eight traits that contribute most to that component.",
+                        "The opposing trait is shown in parentheses for context.",
+                        sep = "\n")) +
   theme(text = element_text(family = "IBM Plex Sans"),
-        plot.title = element_text(size = 32, hjust = 0.5, margin = margin(t = 10, b = 20)),
+        plot.title = element_text(size = 32, margin = margin(t = 10)),
+        plot.subtitle = element_text(size = 14, margin = margin(t = 10, b = 20)),
+        plot.margin = margin(0, 20, 20, 20),
+        panel.spacing.y = unit(20, "points"),
         strip.text = element_text(size = 18, hjust = 0, margin = margin(0, 5, 5, 5)),
         axis.text.x = element_text(size = 14, hjust = 0.5))
+```  
+\  
+
+I won't rehash what's in the graph, so inspect it yourself. But I can imagine characters from some of my favourite books and shows fitting nicely into some of these PCs.
+
+In fact, why don't we see which characters score highest and lowest among these components?
+
+```{r pca-single-component-examples, message = FALSE, fig.align = 'center', fig.width = 12, fig.height = 8.75}
+component_descriptions <- prep(pca_recipe) %>%
+  tidy(type = "coef", number = 2) %>%
+  filter(component %in% c(paste0("PC", 1:6))) %>%
+  left_join(spectrum_list, by = c("terms" = "spectrum")) %>%
+  group_by(component) %>%
+  top_n(2, abs(value)) %>%
+  mutate(spectrum_label = ifelse(value > 0, spectrum_high, spectrum_low),
+         component = paste0("PC0", parse_number(component))) %>%
+  summarise(component_description = paste(spectrum_label, collapse = ", "))
+
+character_list %>%
+  left_join(personality_pca, by = "character_code") %>%
+  pivot_longer(starts_with("PC"), names_to = "component", values_to = "value") %>%
+  group_by(component, sign = sign(value)) %>%
+  top_n(4, abs(value)) %>%
+  ungroup() %>%
+  filter(component %in% c(paste0("PC0", 1:6))) %>%
+  mutate(label = glue("{character_name}<br><span style='font-size:10pt'>({fictional_work})</span>"),
+         label = reorder_within(label, by = value, within = component)) %>%
+  left_join(component_descriptions, by = "component") %>%
+  mutate(component_label = glue("{component}<br><span style='font-size:10pt'>(e.g., {component_description})</span>")) %>%
+  ggplot(aes(value, label, fill = component)) +
+  geom_col(show.legend = FALSE) +
+  geom_vline(xintercept = 0, colour = "grey50") +
+  facet_wrap(~ component_label, scales = "free_y") +
+  scale_y_reordered() +
+  scale_fill_manual(values = top_pc_palette) +
+  labs(title = "Who are the most extreme characters?",
+       subtitle = paste("Each component shows its four highest- and lowest-scoring characters.",
+                        "Below component titles are examples of the traits that comprise that component.",
+                        sep = "\n")) +
+  theme(text = element_text(family = "IBM Plex Sans"),
+        plot.title = element_text(size = 32, margin = margin(t = 10)),
+        plot.subtitle = element_text(size = 14, margin = margin(t = 10, b = 20)),
+        plot.margin = margin(0, 20, 20, 20),
+        panel.spacing.y = unit(20, "points"),
+        strip.text = element_markdown(size = 18, hjust = 0.5, margin = margin(0, 5, 5, 5)),
+        axis.text.x = element_text(size = 14, hjust = 0.5),
+        axis.text.y = element_markdown(size = 12, hjust = 1))
+```  
+\  
+
+These are spot-on! Joffrey Baratheon is ludicrous and deranged, Gus Fring is hard and armoured, and Leslie Knope is most definitely obsessed and hurried. Characters on opposite ends of the PCs are spot-on, too, from tiresome, stick-in-the-mud Mr. Collins to refined, manicured Tahani Al-Jamil.  
+\  
+
+We can also combine components to see how they relate to one another. (In fancier terminology, we're taking a bivariate view instead of a univariate view.) For example, if we plot `PC01` (deranged vs. resonable) against `PC04` (rugged vs. refined), we can see where characters fall along both components, resulting in a more nuanced look at their personalities.
+
+```{r pca-pair-scatterplot, fig.align = 'center', fig.width = 12, fig.height = 10.75}
+character_list %>%
+  left_join(personality_pca, by = "character_code") %>%
+  ggplot(aes(PC01, PC04)) +
+  geom_hline(yintercept = 0, lty = 2, alpha = 0.8, colour = "grey50") +
+  geom_vline(xintercept = 0, lty = 2, alpha = 0.8, colour = "grey50") +
+  geom_text(aes(label = glue("{character_name}\n({fictional_work})")),
+            family = "IBM Plex Sans", size = 3.5, check_overlap = TRUE) +
+  annotate("label", x = 14, y = 13, label = "Deranged\n+\nRugged",
+           family = "IBM Plex Sans", size = 7, label.size = NA) +
+  annotate("label", x = 14, y = -13, label = "Deranged\n+\nRefined",
+           family = "IBM Plex Sans", size = 7, label.size = NA) +
+  annotate("label", x = -14, y = -13, label = "Reasonable\n+\nRefined",
+           family = "IBM Plex Sans", size = 7, label.size = NA) +
+  annotate("label", x = -14, y = 13, label = "Reasonable\n+\nRugged",
+           family = "IBM Plex Sans", size = 7, label.size = NA) +
+  expand_limits(x = c(-21, 21),
+                y = c(-16, 16)) +
+  labs(title = "How can we combine components to better understand characters?") +
+  theme(text = element_text(family = "IBM Plex Sans"),
+        plot.title = element_text(size = 24, margin = margin(t = 10, b = 30)),
+        axis.title = element_text(hjust = 0.5, vjust = 0.5, margin = margin(10, 10, 10, 10)))
 ```
 
-```{r}
+Taking this view also emphasizes that **a single component can only take you so far**. There isn't just one type of "deranged" (`PC01`) character. Adding another component, in this case "rugged vs. refined" (`PC04`), we see that there are different flavours of deranged. For example, Jayne Cobb (*Firefly*) and Lucille Bluth (*Arrested Development*) have approximately the same score on `PC01`, but very different scores on `PC04`. I would agree that they're both deranged, but in very different ways. Adding a third (or fourth! or fifth!) component into the mix would give us even more nuance. (But I won't do that here, because visualizing more than two continuous dimensions gets tricky.)  
+\  
+
+
+### Conclusion
+
+Conclusion goes here!
+
+
+
+
+
+### APPENDIX
+
+### How many principal components should I use?
+
+- We get one component per predictor
+- Our goal is dimensionality reduction, so we need to decide how many to use
+- Two options: pick a number of components or pick a threshold for the amount of variance in the original data that you want the PCs to account for
+- Relationship between number of components and total variance accounted for (20 components, i.e., less than 10% the number of original predictors, captures almost 90% of variance in the original data)
+- In this case, I chose a threshold of 90%, which resulted in 26 PCs
+
+```{r pca-variance-explained, fig.align = 'center', fig.width = 12, fig.height = 7.75}
 # Inspect PCA to see which principal components account for what % of variance
-test <- prep(pca_recipe) %>%
+pca_variance <- prep(pca_recipe) %>%
   tidy(type = "variance", number = 2) %>%
   filter(terms == "cumulative percent variance") %>%
   mutate(pct_variance = value / 100)
 
-test %>%
+pca_variance %>%
   ggplot(aes(component, pct_variance)) +
-  geom_line(size = 1.5) +
+  geom_line(size = 1.5, colour = "#2A9D8F") +
   geom_ribbon(aes(ymin = min(pct_variance), ymax = pct_variance),
-              alpha = 0.3) +
+              alpha = 0.3, fill = "#2A9D8F") +
   scale_x_continuous(breaks = seq(0, 240, by = 20)) +
   scale_y_continuous(breaks = seq(0, 1, by = 0.1),
                      labels = label_percent(accuracy = 1)) +
-  coord_cartesian(ylim = c(min(test$pct_variance), 1)) +
-  labs(title = "Cumulative Variance Explained",
-       x = "Number of Principal Components",
-       y = "Percent of Variance Explained") +
-  theme_light()
+  coord_cartesian(ylim = c(min(pca_variance$pct_variance), 1)) +
+  labs(title = "Just a few components do a lot of heavy lifting",
+       subtitle = "Cumulative variance accounted for as the number of principal components increases",
+       x = "# of Principal Components",
+       y = "% of Variance Accounted For") +
+  theme(text = element_text(family = "IBM Plex Sans"),
+        plot.title = element_text(size = 24, margin = margin(t = 10)),
+        plot.subtitle = element_text(size = 15, margin = margin(t = 10, b = 10)),
+        plot.margin = margin(0, 20, 20, 20),
+        panel.grid.major = element_line(colour = "grey85"),
+        axis.title = element_text(size = 14, colour = "grey50"),
+        axis.title.x = element_text(margin = margin(t = 10)),
+        axis.title.y = element_text(angle = 90, margin = margin(r = 10)),
+        axis.text.x = element_text(size = 16, hjust = 0.5),
+        axis.text.y = element_text(size = 16, hjust = 1))
 ```
-
-
-
-```{r pca-specified-variance-threshold}
-# Add threshold to PCA to cover 50% of variance
-pca_recipe <- recipe(~ ., data = pca_data) %>%
-  update_role(character_code, new_role = "id") %>%
-  step_normalize(all_predictors()) %>%
-  step_pca(all_predictors(),
-           threshold = 0.90)
-
-# Run PCA
-personality_pca <- prep(pca_recipe) %>%
-  juice()
-
-personality_pca
-```
-
-```{r pca-pair-scatterplot}
-character_list %>%
-  left_join(personality_pca, by = "character_code") %>%
-  filter(fictional_work %in% interesting_works) %>%
-  ggplot(aes(PC01, PC03)) +
-  geom_hline(yintercept = 0, lty = 2) +
-  geom_vline(xintercept = 0, lty = 2) +
-  geom_text(aes(label = character_name), check_overlap = TRUE) +
-  expand_limits(x = c(-20, 20),
-                y = c(-20, 20)) +
-  theme_light()
-```
-
-
-### APPENDIX
 
 ```{r gender}
 personalities %>%
