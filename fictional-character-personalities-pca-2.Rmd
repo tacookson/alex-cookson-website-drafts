@@ -1,0 +1,134 @@
+---
+title: "fictional-character-personalities"
+author: "Alex Cookson"
+date: "11/11/2020"
+output: html_document
+---  
+\  
+
+Why PCA?
+
+- PCA, dimensionality reduction
+- Overview of data
+
+I often walk through code in posts, but I won't be doing that here. Instead, I'll focus more on the analysis itself.
+
+
+## Setup
+
+```{r setup, message = FALSE, warning = FALSE}
+library(tidyverse) # For data manipulation
+library(tidymodels) # For PCA
+library(tidytext) # For reorder_within()
+library(extrafont) # For custom fonts on graphs
+library(glue) # For creating strings from multiple pieces
+library(ggtext) # For fine-grained text formatting
+
+# These are to make tables look nice on the website
+# You probably won't need them
+library(knitr)
+library(kableExtra)
+
+theme_set(theme_void())
+
+personalities_raw <- read_tsv("~/data/fictional-character-personalities/personalities.txt")
+
+genders <- read_csv("~/data/fictional-character-personalities/ref/character-gender.csv")
+
+personalities <- personalities_raw %>%
+  left_join(genders)
+```  
+\  
+
+```{r data-for-pca}
+pca_data <- personalities %>%
+  filter(!is_emoji) %>%
+  select(character_code, spectrum, mean) %>%
+  pivot_wider(names_from = spectrum, values_from = mean)
+```
+
+```{r pca}
+# Write recipe for PCA
+pca_recipe <- recipe(~ ., data = pca_data) %>%
+  # Specify character_code as key/id column
+  update_role(character_code, new_role = "id") %>%
+  # Normalize sets mean to zero and standard deviation of one
+  step_normalize(all_predictors()) %>%
+  # PCA is done here
+  # Use threshold to specify we want to capture 90% of variance in the data
+  step_pca(all_predictors(),
+           threshold = 0.9)
+
+# prep() implements the recipe
+# bake() applies the PCA model to a dataset
+personality_pca <- prep(pca_recipe) %>%
+  bake(new_data = pca_data)
+```
+
+### How many principal components should I use?
+
+- We get one component per predictor
+- Our goal is dimensionality reduction, so we need to decide how many to use
+- Two options: pick a number of components or pick a threshold for the amount of variance in the original data that you want the PCs to account for
+- Relationship between number of components and total variance accounted for (20 components, i.e., less than 10% the number of original predictors, captures almost 90% of variance in the original data)
+- In this case, I chose a threshold of 90%, which resulted in 26 PCs
+
+```{r pca-variance-explained, fig.align = 'center', fig.width = 12, fig.height = 7.75}
+# Inspect PCA to see which principal components account for what % of variance
+pca_variance <- prep(pca_recipe) %>%
+  tidy(type = "variance", number = 2) %>%
+  filter(terms == "cumulative percent variance") %>%
+  mutate(pct_variance = value / 100)
+
+pca_variance %>%
+  ggplot(aes(component, pct_variance)) +
+  geom_line(size = 1.5, colour = "#2A9D8F") +
+  geom_ribbon(aes(ymin = min(pct_variance), ymax = pct_variance),
+              alpha = 0.3, fill = "#2A9D8F") +
+  scale_x_continuous(breaks = seq(0, 240, by = 20)) +
+  scale_y_continuous(breaks = seq(0, 1, by = 0.1),
+                     labels = label_percent(accuracy = 1)) +
+  coord_cartesian(ylim = c(min(pca_variance$pct_variance), 1)) +
+  labs(title = "Just a few components do a lot of heavy lifting",
+       subtitle = "Cumulative variance accounted for as the number of principal components increases",
+       x = "# of Principal Components",
+       y = "% of Variance Accounted For") +
+  theme(text = element_text(family = "IBM Plex Sans"),
+        plot.title = element_text(size = 24, margin = margin(t = 10)),
+        plot.subtitle = element_text(size = 15, margin = margin(t = 10, b = 10)),
+        plot.margin = margin(0, 20, 20, 20),
+        panel.grid.major = element_line(colour = "grey85"),
+        axis.title = element_text(size = 14, colour = "grey50"),
+        axis.title.x = element_text(margin = margin(t = 10)),
+        axis.title.y = element_text(angle = 90, margin = margin(r = 10)),
+        axis.text.x = element_text(size = 16, hjust = 0.5),
+        axis.text.y = element_text(size = 16, hjust = 1))
+```
+
+```{r gender}
+personalities %>%
+  filter(!is_emoji,
+         !is.na(gender)) %>%
+  group_by(spectrum, spectrum_low, spectrum_high) %>%
+  mutate(overall_avg_score = mean(mean) - 50) %>%
+  ungroup() %>%
+  group_by(spectrum, spectrum_low, spectrum_high, overall_avg_score, gender) %>%
+  summarise(avg_score = mean(mean) - 50) %>%
+  ungroup() %>%
+  pivot_wider(names_from = gender, values_from = avg_score) %>%
+  mutate(female = female - overall_avg_score,
+         male = male - overall_avg_score) %>%
+  pivot_longer(female:male, names_to = "gender", values_to = "avg_diff") %>%
+  group_by(gender) %>%
+  top_n(16, wt = abs(avg_diff)) %>%
+  ungroup() %>%
+  unite("spectrum_name", spectrum_low, spectrum_high, sep = " <---> ") %>%
+  mutate(spectrum_name = reorder_within(spectrum_name, avg_diff, gender)) %>%
+  ggplot(aes(avg_diff, spectrum_name, fill = gender)) +
+  geom_col() +
+  geom_vline(xintercept = 0) +
+  scale_y_reordered() +
+  facet_wrap(~ gender, scales = "free_y") +
+  theme_light()
+```
+
